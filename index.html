@@ -1,0 +1,3110 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>楓之谷 2D RPG - 究極進化版</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #05070f;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow: hidden;
+            touch-action: none;
+        }
+        /* Classic MapleStory UI window styling */
+        .maple-window {
+            background: linear-gradient(180deg, rgba(235, 243, 255, 0.98) 0%, rgba(205, 223, 255, 0.98) 100%);
+            border: 3px solid #3c5475;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5), inset 0 2px 0 rgba(255, 255, 255, 0.8);
+            border-radius: 8px;
+        }
+        .maple-window-header {
+            background: linear-gradient(90deg, #3c5475 0%, #567299 100%);
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+        }
+        .maple-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .maple-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 4px;
+        }
+        .maple-scrollbar::-webkit-scrollbar-thumb {
+            background: #3c5475;
+            border-radius: 4px;
+        }
+        .action-btn {
+            background: rgba(30, 41, 59, 0.8);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+        }
+        .action-btn:active {
+            background: rgba(59, 130, 246, 0.9);
+            transform: scale(0.9);
+        }
+        .text-shadow {
+            text-shadow: 1px 1px 2px black;
+        }
+    </style>
+</head>
+<body class="w-screen h-screen flex flex-col justify-between items-center relative select-none">
+
+    <!-- Top Info and Notification Toast -->
+    <div id="toast-container" class="absolute top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col gap-2"></div>
+
+    <!-- Main Game Screen Area -->
+    <div class="relative w-full flex-grow flex justify-center items-center overflow-hidden">
+        <!-- Canvas Game Window -->
+        <canvas id="gameCanvas" class="block shadow-2xl bg-sky-300"></canvas>
+
+        <!-- [CRITICAL NEW] Floating Job Advancement Alert (Extremely obvious!) -->
+        <div id="job-advance-alert" class="absolute top-6 left-1/2 -translate-x-1/2 z-40 hidden">
+            <button onclick="showJobAdvanceMenu()" class="bg-gradient-to-r from-purple-600 via-pink-500 to-amber-500 border-2 border-white text-white font-black px-6 py-2.5 rounded-full shadow-[0_0_25px_rgba(168,85,247,0.9)] animate-pulse flex items-center gap-2 text-xs md:text-sm transition-transform active:scale-95">
+                <i class="fa-solid fa-crown text-yellow-300 text-sm"></i> 
+                <span>💡 達成轉職條件！點擊此處進行【轉職選擇】！</span>
+            </button>
+        </div>
+
+        <!-- Dynamic Portal Hint Button (Solves map transition clicking) -->
+        <div id="portal-hint" class="absolute bottom-28 left-1/2 -translate-x-1/2 z-40 hidden">
+            <button onclick="triggerPortalManual()" class="bg-gradient-to-r from-cyan-500 to-blue-600 border-2 border-white text-white font-black px-6 py-2.5 rounded-full shadow-2xl animate-bounce hover:scale-105 active:scale-95 flex items-center gap-2">
+                <i class="fa-solid fa-door-open"></i> 進入傳送門
+            </button>
+        </div>
+
+        <!-- 1. Character Info (Status) & Equip Window -->
+        <div id="window-status" class="maple-window absolute w-88 top-8 left-6 z-30 hidden pointer-events-auto">
+            <div class="maple-window-header px-3 py-1.5 flex justify-between items-center text-white font-bold text-sm cursor-move rounded-t">
+                <span class="flex items-center gap-1.5"><i class="fa-solid fa-user text-xs"></i> 角色屬性與裝備 (Status & Equip)</span>
+                <button onclick="toggleWindow('status')" class="hover:text-red-300 transition-colors"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-3 text-slate-800 text-sm">
+                <!-- Basic Job & Rank UI Info -->
+                <div class="flex justify-between border-b border-blue-200 pb-1.5 mb-2">
+                    <div>
+                        <span class="font-extrabold text-blue-800" id="stat-job">初心者</span>
+                        <span class="text-xs bg-slate-200 text-slate-700 px-1 py-0.2 rounded ml-1" id="stat-job-rank">1轉冒險家</span>
+                    </div>
+                    <span class="font-extrabold text-amber-700">等級: <span id="stat-level">1</span></span>
+                </div>
+
+                <!-- Equipped Slots Section -->
+                <div class="bg-blue-50/50 p-2 rounded border border-blue-200 mb-2 flex items-center justify-around gap-2 text-xs">
+                    <div class="flex flex-col items-center">
+                        <span class="text-slate-400 text-[10px] mb-1 font-bold">武器槽 (Weapon)</span>
+                        <div id="equip-slot-weapon" onclick="unequipItem('weapon')" class="w-12 h-12 bg-white border-2 border-blue-300 hover:border-red-400 rounded flex flex-col items-center justify-center cursor-pointer relative shadow-sm">
+                            <span class="text-xl">🪵</span>
+                            <span class="text-[9px] text-slate-500 scale-90">木劍</span>
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <span class="text-slate-400 text-[10px] mb-1 font-bold">防具槽 (Armor)</span>
+                        <div id="equip-slot-armor" onclick="unequipItem('armor')" class="w-12 h-12 bg-white border-2 border-blue-300 hover:border-red-400 rounded flex flex-col items-center justify-center cursor-pointer relative shadow-sm">
+                            <span class="text-xl">👕</span>
+                            <span class="text-[9px] text-slate-500 scale-90">皮甲</span>
+                        </div>
+                    </div>
+                    <div class="text-left flex-grow pl-2 border-l border-blue-200">
+                        <div class="text-[10px] font-bold text-blue-900">當前裝備加成:</div>
+                        <div class="text-[10px] text-slate-600">武器攻擊: <span id="equip-bonus-att" class="text-red-600 font-bold">+2</span></div>
+                        <div class="text-[10px] text-slate-600">防具防禦: <span id="equip-bonus-def" class="text-blue-600 font-bold">+5</span></div>
+                    </div>
+                </div>
+
+                <!-- Attributes allocation -->
+                <div class="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                    <div>最大 HP: <span class="font-extrabold" id="stat-maxhp">100</span></div>
+                    <div>最大 MP: <span class="font-extrabold" id="stat-maxmp">50</span></div>
+                    <div>物理攻擊: <span class="font-extrabold text-red-600" id="stat-att">10 - 15</span></div>
+                    <div>物理防禦: <span class="font-extrabold text-blue-700" id="stat-def">5</span></div>
+                </div>
+
+                <div class="border-t border-blue-200 my-2 pt-1.5 flex justify-between items-center">
+                    <span class="font-bold text-amber-600 text-xs">能力點數 (AP): <span id="stat-ap" class="text-sm bg-amber-100 px-1.5 py-0.5 rounded font-extrabold">0</span></span>
+                    <!-- Trigger Advancement Button -->
+                    <button id="btn-job-advance" onclick="showJobAdvanceMenu()" class="hidden bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-black text-[10px] px-2 py-1 rounded shadow animate-pulse">進行轉職選擇!</button>
+                </div>
+
+                <div class="flex flex-col gap-1 text-xs">
+                    <div class="flex items-center justify-between bg-white/60 p-1 rounded border border-blue-100">
+                        <span>力量 (STR): <span id="stat-str" class="font-bold">4</span></span>
+                        <button onclick="allocateStat('str')" class="stat-plus-btn bg-blue-500 hover:bg-blue-600 text-white w-4.5 h-4.5 rounded flex items-center justify-center font-bold"><i class="fa-solid fa-plus text-[10px]"></i></button>
+                    </div>
+                    <div class="flex items-center justify-between bg-white/60 p-1 rounded border border-blue-100">
+                        <span>敏捷 (DEX): <span id="stat-dex" class="font-bold">4</span></span>
+                        <button onclick="allocateStat('dex')" class="stat-plus-btn bg-blue-500 hover:bg-blue-600 text-white w-4.5 h-4.5 rounded flex items-center justify-center font-bold"><i class="fa-solid fa-plus text-[10px]"></i></button>
+                    </div>
+                    <div class="flex items-center justify-between bg-white/60 p-1 rounded border border-blue-100">
+                        <span>智力 (INT): <span id="stat-int" class="font-bold">4</span></span>
+                        <button onclick="allocateStat('int')" class="stat-plus-btn bg-blue-500 hover:bg-blue-600 text-white w-4.5 h-4.5 rounded flex items-center justify-center font-bold"><i class="fa-solid fa-plus text-[10px]"></i></button>
+                    </div>
+                    <div class="flex items-center justify-between bg-white/60 p-1 rounded border border-blue-100">
+                        <span>幸運 (LUK): <span id="stat-luk" class="font-bold">4</span></span>
+                        <button onclick="allocateStat('luk')" class="stat-plus-btn bg-blue-500 hover:bg-blue-600 text-white w-4.5 h-4.5 rounded flex items-center justify-center font-bold"><i class="fa-solid fa-plus text-[10px]"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Job Advancement Picker Menu Dialog -->
+        <div id="window-job-picker" class="maple-window absolute w-80 top-1/4 left-1/2 -translate-x-1/2 z-40 hidden pointer-events-auto">
+            <div class="maple-window-header px-3 py-1.5 flex justify-between items-center text-white font-bold text-xs rounded-t">
+                <span><i class="fa-solid fa-crown text-amber-300"></i> 楓谷轉職聖殿</span>
+                <button onclick="document.getElementById('window-job-picker').classList.add('hidden')" class="hover:text-red-300"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-4 text-slate-800 text-xs flex flex-col gap-2.5">
+                <p id="job-picker-desc" class="font-bold text-center text-indigo-900">恭喜！你可以選擇合適的職涯：</p>
+                <div id="job-options-list" class="flex flex-col gap-2">
+                    <!-- Loaded Dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Inventory (Item) Window -->
+        <div id="window-inventory" class="maple-window absolute w-88 top-8 right-6 z-30 hidden pointer-events-auto">
+            <div class="maple-window-header px-3 py-1.5 flex justify-between items-center text-white font-bold text-sm cursor-move rounded-t">
+                <span class="flex items-center gap-1.5"><i class="fa-solid fa-bag-shopping text-xs"></i> 背包道具 (Inventory)</span>
+                <button onclick="toggleWindow('inventory')" class="hover:text-red-300 transition-colors"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-3 text-slate-800 text-xs flex flex-col h-80">
+                <!-- Inventory Tabs -->
+                <div class="flex gap-1 mb-2 border-b border-blue-300 pb-1 font-bold">
+                    <button id="tab-consume" onclick="setInventoryTab('consume')" class="px-3 py-1 bg-blue-500 text-white rounded">消耗藥水</button>
+                    <button id="tab-equip" onclick="setInventoryTab('equip')" class="px-3 py-1 bg-slate-300 text-slate-700 rounded hover:bg-blue-100">裝備武器</button>
+                </div>
+                <!-- Items list dynamic renderer -->
+                <div id="inventory-list" class="flex-grow overflow-y-auto maple-scrollbar pr-1 grid grid-cols-1 gap-1.5">
+                    <!-- Dynamic Items render -->
+                </div>
+                <!-- Mesos -->
+                <div class="mt-2 pt-2 border-t border-blue-300 flex justify-between items-center text-xs font-bold bg-white bg-opacity-70 p-2 rounded">
+                    <span class="flex items-center gap-1 text-amber-600"><i class="fa-solid fa-coins"></i> 楓幣 (Mesos)</span>
+                    <span id="stat-mesos" class="text-right text-slate-800 text-sm font-extrabold">200 🪙</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Skill Tree Window -->
+        <div id="window-skills" class="maple-window absolute w-88 top-24 left-12 z-30 hidden pointer-events-auto">
+            <div class="maple-window-header px-3 py-1.5 flex justify-between items-center text-white font-bold text-sm cursor-move rounded-t">
+                <span class="flex items-center gap-1.5"><i class="fa-solid fa-bolt text-xs"></i> 技能配點 (Skills)</span>
+                <button onclick="toggleWindow('skills')" class="hover:text-red-300 transition-colors"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-3 text-slate-800 text-xs">
+                <div class="flex justify-between items-center mb-2.5">
+                    <span class="font-extrabold text-blue-700">可用技能點數 (SP): <span id="stat-sp" class="bg-blue-100 px-2 py-0.5 rounded">0</span></span>
+                </div>
+                <div class="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1 maple-scrollbar" id="skill-list-container">
+                    <!-- Dynamic rendering based on job -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. Shop / NPC Window -->
+        <div id="window-shop" class="maple-window absolute w-96 top-1/4 left-1/2 -translate-x-1/2 z-30 hidden pointer-events-auto">
+            <div class="maple-window-header px-3 py-1.5 flex justify-between items-center text-white font-bold text-sm cursor-move rounded-t">
+                <span class="flex items-center gap-1.5"><i class="fa-solid fa-shop text-xs"></i> 多功能維多利亞商店 (Shop)</span>
+                <button onclick="toggleWindow('shop')" class="hover:text-red-300 transition-colors"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-3 text-slate-800 text-xs">
+                <!-- Shopkeeper Profile -->
+                <div class="flex items-center gap-2.5 bg-white bg-opacity-70 p-2 rounded border border-blue-200 mb-2.5">
+                    <div class="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center text-xl shadow-inner border border-amber-300">🧙‍♂️</div>
+                    <div>
+                        <h4 class="font-extrabold text-blue-700 text-xs">冒險大廳雜貨大亨</h4>
+                        <p class="text-[10px] text-slate-500">「1轉、2轉、3轉神兵利器與極品防具都在這！」</p>
+                    </div>
+                </div>
+
+                <!-- Shop Tabs -->
+                <div class="flex gap-1 mb-2 font-bold text-[10px]">
+                    <button id="shop-tab-potions" onclick="setShopTab('potions')" class="px-2 py-1 bg-amber-500 text-white rounded">藥水消耗</button>
+                    <button id="shop-tab-weapons" onclick="setShopTab('weapons')" class="px-2 py-1 bg-slate-200 text-slate-700 rounded hover:bg-slate-300">神兵裝備</button>
+                </div>
+
+                <!-- Product list -->
+                <div id="shop-items-container" class="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1 maple-scrollbar">
+                    <!-- Dynamically populated products -->
+                </div>
+
+                <div class="flex justify-between items-center text-[11px] text-slate-500 border-t border-blue-200 pt-2.5 mt-2.5">
+                    <span>剩餘楓幣: <strong id="shop-mesos" class="text-amber-600 font-extrabold">0 🪙</strong></span>
+                    <button onclick="sellAllLoot()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold px-2.5 py-1 rounded shadow text-[10px] transition-colors">一鍵賣出所有雜物 (各25🪙)</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. Custom Keybindings Config Window -->
+        <div id="window-keyconfig" class="maple-window absolute w-80 top-12 left-1/3 z-40 hidden pointer-events-auto">
+            <div class="maple-window-header px-3 py-1.5 flex justify-between items-center text-white font-bold text-sm cursor-move rounded-t">
+                <span class="flex items-center gap-1.5"><i class="fa-solid fa-keyboard text-xs"></i> 快捷鍵設定 (Key Settings)</span>
+                <button onclick="toggleWindow('keyconfig')" class="hover:text-red-300 transition-colors"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-3 text-slate-800 text-xs">
+                <p class="mb-3 text-[10px] text-slate-500 font-bold leading-normal">點擊「重新綁定」後按下鍵盤上任意按鍵即可完成改鍵：</p>
+                <div id="keybinds-list-container" class="flex flex-col gap-1.5 max-h-64 overflow-y-auto pr-1 maple-scrollbar">
+                    <!-- Loaded dynamically in JS -->
+                </div>
+                <div class="mt-3 pt-2 border-t border-blue-300 flex justify-end">
+                    <button onclick="resetKeybindings()" class="bg-red-500 hover:bg-red-600 text-white px-2.5 py-1 rounded font-bold text-[10px] transition-all active:scale-95">恢復預設按鍵</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overlays -->
+        <!-- Start Game / Respawn Modal -->
+        <div id="game-overlay" class="absolute inset-0 bg-black/60 flex flex-col justify-center items-center gap-4 z-40">
+            <div class="text-center p-5 rounded-lg bg-gradient-to-b from-slate-800 to-slate-950 border-2 border-amber-400 max-w-sm w-11/12 shadow-2xl text-shadow">
+                <h1 class="text-3xl font-black text-amber-400 tracking-wider mb-2">楓之谷 2D 勇者傳說</h1>
+                <p class="text-slate-300 text-xs mb-5 leading-relaxed">挑戰全職業 1、2、3 轉，大幅提升的經驗值與自定義控制鍵！</p>
+                <button id="btn-start-game" class="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-black py-2.5 rounded-md shadow-lg transition-all transform hover:scale-105 active:scale-95 text-xs">
+                    開始楓之谷冒險！
+                </button>
+                <div class="mt-4 text-[10px] text-slate-400 text-left bg-slate-900/80 p-2.5 rounded border border-slate-700">
+                    <div class="font-bold text-amber-400 mb-1">🎮 預設控制說明 (可自改鍵)：</div>
+                    <div class="grid grid-cols-2 gap-x-3 gap-y-1">
+                        <div>← / → 移動角色</div>
+                        <div>Space 空白鍵：跳躍</div>
+                        <div>Ctrl 鍵：普通物理攻擊</div>
+                        <div>Shift 鍵：施放職業技能</div>
+                        <div>Z 鍵：自動撿起掉落物</div>
+                        <div>↑ 鍵：進入地圖傳送門</div>
+                        <div>1 / 2 鍵：吃紅水/藍水</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Death Overlay Screen -->
+        <div id="death-overlay" class="absolute inset-0 bg-black/70 flex flex-col justify-center items-center gap-4 z-40 hidden">
+            <div class="text-center p-6 rounded-lg bg-slate-900 border-2 border-red-500 max-w-sm w-11/12 shadow-2xl text-shadow">
+                <div class="text-4xl mb-2">👻</div>
+                <h2 class="text-xl font-black text-red-500 tracking-wider mb-2">你已經在冒險中倒下了...</h2>
+                <p class="text-slate-400 text-xs mb-5 leading-relaxed">沒關係，神聖的祭司將為你超渡！請在安全的城鎮重整旗鼓重新出發！</p>
+                <button onclick="respawnPlayer()" class="w-full bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white font-black py-2.5 rounded-md shadow-lg transition-all transform hover:scale-105 active:scale-95 text-xs">
+                    回城復活 (在楓之島重新啟程)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Virtual Controls -->
+    <div id="mobile-controls" class="absolute bottom-20 left-0 right-0 z-20 pointer-events-none select-none flex justify-between items-end px-4 pb-2 md:hidden">
+        <div class="pointer-events-auto flex gap-1.5">
+            <button id="mbtn-left" class="action-btn w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-black">
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <button id="mbtn-right" class="action-btn w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-black">
+                <i class="fa-solid fa-chevron-right"></i>
+            </button>
+        </div>
+        <div class="pointer-events-auto flex flex-col gap-1.5 items-end">
+            <!-- Potion hotkeys -->
+            <div class="flex gap-1.5 mb-1">
+                <button onclick="usePotion('red_potion')" class="action-btn w-9 h-9 rounded-full flex flex-col items-center justify-center text-white relative text-xs">
+                    <span>🔴</span>
+                    <span id="mbtn-pot-red-count" class="absolute -bottom-1 -right-1 bg-red-600 text-white text-[8px] px-1 rounded-full font-bold">0</span>
+                </button>
+                <button onclick="usePotion('blue_potion')" class="action-btn w-9 h-9 rounded-full flex flex-col items-center justify-center text-white relative text-xs">
+                    <span>🔵</span>
+                    <span id="mbtn-pot-blue-count" class="absolute -bottom-1 -right-1 bg-blue-600 text-white text-[8px] px-1 rounded-full font-bold">0</span>
+                </button>
+            </div>
+            <!-- Action keys -->
+            <div class="grid grid-cols-2 gap-1.5">
+                <button id="mbtn-pick" class="action-btn w-10 h-10 rounded-full flex flex-col items-center justify-center text-white text-[10px] font-bold">
+                    <i class="fa-solid fa-hand-holding-hand mb-0.5 text-xs text-amber-300"></i>撿取
+                </button>
+                <button id="mbtn-skill" class="action-btn w-10 h-10 rounded-full flex flex-col items-center justify-center text-white text-[10px] font-bold">
+                    <i class="fa-solid fa-bolt mb-0.5 text-xs text-cyan-300"></i>技能
+                </button>
+                <button id="mbtn-attack" class="action-btn w-12 h-12 rounded-full flex flex-col items-center justify-center text-white text-[11px] font-black border-2 border-red-500">
+                    <i class="fa-solid fa-gavel mb-0.5 text-sm text-red-400"></i>攻擊
+                </button>
+                <button id="mbtn-jump" class="action-btn w-12 h-12 rounded-full flex flex-col items-center justify-center text-white text-[11px] font-black border-2 border-blue-500">
+                    <i class="fa-solid fa-angles-up mb-0.5 text-sm text-blue-400"></i>跳躍
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Classic Bottom Interface Status Bar -->
+    <footer class="w-full h-16 bg-slate-950 border-t-4 border-slate-800 flex items-center justify-between px-3 md:px-6 relative z-30 select-none text-shadow">
+        <!-- Player Level & Name -->
+        <div class="flex flex-col text-white justify-center h-full max-w-[120px] md:max-w-xs">
+            <span class="text-amber-400 text-xs md:text-sm font-extrabold flex items-center gap-1">
+                Lv.<span id="ui-level">1</span> <span id="ui-job" class="bg-indigo-950 text-indigo-300 text-[10px] px-1.5 py-0.2 rounded font-bold border border-indigo-700/50">初心者</span>
+            </span>
+            <span class="text-[10px] md:text-xs text-slate-400 font-medium overflow-hidden text-ellipsis whitespace-nowrap mt-0.5">冒險家一號</span>
+        </div>
+
+        <!-- HP & MP Stats Box -->
+        <div class="flex-grow flex flex-col gap-1 max-w-xs md:max-w-md mx-2">
+            <!-- HP Bar -->
+            <div class="flex items-center gap-1 text-[10px] font-bold text-white relative">
+                <span class="w-5 text-red-400 text-right">HP</span>
+                <div class="flex-grow h-3.5 bg-slate-900 rounded overflow-hidden border border-slate-700 relative">
+                    <div id="ui-hp-bar" class="h-full bg-gradient-to-r from-red-600 to-rose-500 transition-all duration-100" style="width: 100%"></div>
+                    <span id="ui-hp-text" class="absolute inset-0 flex items-center justify-center text-[9px]">100 / 100</span>
+                </div>
+            </div>
+            <!-- MP Bar -->
+            <div class="flex items-center gap-1 text-[10px] font-bold text-white relative">
+                <span class="w-5 text-sky-400 text-right">MP</span>
+                <div class="flex-grow h-3.5 bg-slate-900 rounded overflow-hidden border border-slate-700 relative">
+                    <div id="ui-mp-bar" class="h-full bg-gradient-to-r from-sky-600 to-cyan-500 transition-all duration-100" style="width: 100%"></div>
+                    <span id="ui-mp-text" class="absolute inset-0 flex items-center justify-center text-[9px]">50 / 50</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Hotkeys Menu -->
+        <div class="flex items-center gap-1">
+            <button onclick="toggleWindow('status')" class="px-1.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded text-[10px] md:text-xs font-bold flex flex-col items-center">
+                <i class="fa-solid fa-user text-xs"></i><span class="hidden md:inline mt-0.5">屬性裝備</span>
+            </button>
+            <button onclick="toggleWindow('inventory')" class="px-1.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded text-[10px] md:text-xs font-bold flex flex-col items-center">
+                <i class="fa-solid fa-bag-shopping text-xs"></i><span class="hidden md:inline mt-0.5">背包道具</span>
+            </button>
+            <button onclick="toggleWindow('skills')" class="px-1.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded text-[10px] md:text-xs font-bold flex flex-col items-center">
+                <i class="fa-solid fa-bolt text-xs"></i><span class="hidden md:inline mt-0.5">技能配點</span>
+            </button>
+            <button onclick="toggleWindow('keyconfig')" class="px-1.5 py-1 bg-violet-950/70 hover:bg-violet-900/80 text-violet-200 hover:text-white rounded text-[10px] md:text-xs font-bold flex flex-col items-center border border-violet-800/40">
+                <i class="fa-solid fa-keyboard text-xs"></i><span class="hidden md:inline mt-0.5">快捷設定</span>
+            </button>
+            <button onclick="toggleWindow('shop')" class="px-1.5 py-1 bg-amber-950/60 hover:bg-amber-900/80 text-amber-200 hover:text-white rounded text-[10px] md:text-xs font-bold flex flex-col items-center border border-amber-800/40">
+                <i class="fa-solid fa-shop text-xs"></i><span class="hidden md:inline mt-0.5">功能商店</span>
+            </button>
+        </div>
+
+        <!-- Thin Experience Bar on top of Footer -->
+        <div class="absolute top-0 left-0 right-0 h-1.5 bg-slate-950 flex">
+            <div id="ui-exp-bar" class="h-full bg-gradient-to-r from-lime-500 to-emerald-400 transition-all" style="width: 0%"></div>
+        </div>
+        <div class="absolute -top-3.5 right-4 bg-slate-950 border-x border-t border-slate-800 text-[8px] px-1.5 text-slate-400 rounded-t">
+            EXP: <span id="ui-exp-text">0.00%</span>
+        </div>
+    </footer>
+
+    <!-- Audio toggle -->
+    <div class="absolute top-4 right-4 z-40 bg-slate-900 bg-opacity-70 border border-slate-700 p-2 rounded-full cursor-pointer hover:bg-slate-800 text-white w-9 h-9 flex items-center justify-center transition-all animate-pulse" onclick="toggleAudio()" id="audio-toggle-btn">
+        <i class="fa-solid fa-volume-xmark text-sm" id="audio-icon"></i>
+    </div>
+
+    <script>
+        // --- WEBAUDIO RETRO SYNTH SOUNDS ---
+        let audioCtx = null;
+        let audioOn = false;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function toggleAudio() {
+            initAudio();
+            audioOn = !audioOn;
+            const btn = document.getElementById('audio-toggle-btn');
+            const icon = document.getElementById('audio-icon');
+            if (audioOn) {
+                icon.className = "fa-solid fa-volume-high text-sm";
+                btn.classList.add("bg-indigo-600", "border-indigo-400");
+                btn.classList.remove("bg-slate-900", "border-slate-700");
+                playSfx(260, 'sine', 0.1, 0.1);
+            } else {
+                icon.className = "fa-solid fa-volume-xmark text-sm";
+                btn.classList.remove("bg-indigo-600", "border-indigo-400");
+                btn.classList.add("bg-slate-900", "border-slate-700");
+            }
+        }
+
+        function playSfx(freq, type, duration, vol) {
+            if (!audioOn || !audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch (e) {
+                console.log(e);
+            }
+        }
+
+        function sfxJump() { playSfx(420, 'triangle', 0.15, 0.2); }
+        function sfxAttack() { playSfx(150, 'sawtooth', 0.1, 0.25); }
+        function sfxBow() { playSfx(600, 'sine', 0.08, 0.15); setTimeout(() => playSfx(300, 'sine', 0.1, 0.1), 50); }
+        function sfxMeso() { playSfx(1100, 'sine', 0.05, 0.2); setTimeout(() => playSfx(1500, 'sine', 0.1, 0.25), 40); }
+        function sfxLevelUp() {
+            const arr = [523, 659, 784, 1046];
+            arr.forEach((f, i) => setTimeout(() => playSfx(f, 'sine', 0.25, 0.25), i * 80));
+        }
+        function sfxAdvancement() {
+            const arr = [440, 554, 659, 880, 1109];
+            arr.forEach((f, i) => setTimeout(() => playSfx(f, 'sawtooth', 0.3, 0.2), i * 90));
+        }
+
+        // --- CUSTOM KEYBINDINGS ENGINE ---
+        let keyBinds = {
+            moveLeft: 'ArrowLeft',
+            moveRight: 'ArrowRight',
+            jump: 'Space',
+            attack: 'Ctrl',
+            skill: 'Shift',
+            pick: 'z',
+            portal: 'ArrowUp',
+            redPot: '1',
+            bluePot: '2'
+        };
+
+        // Load local storage binds if any
+        if (localStorage.getItem('maple_keys_v2')) {
+            keyBinds = JSON.parse(localStorage.getItem('maple_keys_v2'));
+        }
+
+        const ACTION_LABELS = {
+            moveLeft: '向左跑',
+            moveRight: '向右跑',
+            jump: '跳躍 / 跳高高',
+            attack: '普通攻擊',
+            skill: '施放職業技能',
+            pick: '撿起掉落物',
+            portal: '進入傳送門',
+            redPot: '快吃紅色藥水',
+            bluePot: '快吃藍色藥水'
+        };
+
+        let bindingAction = null;
+
+        function updateKeyConfigUI() {
+            const container = document.getElementById('keybinds-list-container');
+            container.innerHTML = '';
+            
+            Object.keys(keyBinds).forEach(act => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center justify-between bg-white bg-opacity-70 p-1.5 rounded border border-blue-200 text-xs';
+                
+                const isThisBinding = bindingAction === act;
+                const btnText = isThisBinding ? '請按下任意鍵...' : `[ ${keyBinds[act]} ]`;
+                const btnStyle = isThisBinding 
+                    ? 'bg-amber-500 text-white px-2 py-1 rounded font-black animate-pulse'
+                    : 'bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1 rounded font-bold';
+
+                row.innerHTML = `
+                    <span class="font-bold text-slate-800">${ACTION_LABELS[act]}</span>
+                    <button onclick="startKeyBinding('${act}')" class="${btnStyle} text-[10px] min-w-[110px] text-center transition-all">${btnText}</button>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function startKeyBinding(action) {
+            bindingAction = action;
+            updateKeyConfigUI();
+        }
+
+        function resetKeybindings() {
+            keyBinds = {
+                moveLeft: 'ArrowLeft',
+                moveRight: 'ArrowRight',
+                jump: 'Space',
+                attack: 'Ctrl',
+                skill: 'Shift',
+                pick: 'z',
+                portal: 'ArrowUp',
+                redPot: '1',
+                bluePot: '2'
+            };
+            localStorage.setItem('maple_keys_v2', JSON.stringify(keyBinds));
+            bindingAction = null;
+            toast("按鍵設定已恢復預設！", "bg-emerald-900");
+            updateUI();
+            updateKeyConfigUI();
+        }
+
+        // --- GAME ASSETS & DATA CONFIG ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const GAME_WIDTH = 1000;
+        const GAME_HEIGHT = 550;
+        canvas.width = GAME_WIDTH;
+        canvas.height = GAME_HEIGHT;
+
+        function resizeCanvas() {
+            const parent = canvas.parentElement;
+            const scale = Math.min(parent.clientWidth / GAME_WIDTH, parent.clientHeight / GAME_HEIGHT);
+            canvas.style.transform = `scale(${scale})`;
+            canvas.style.transformOrigin = 'center center';
+        }
+        window.addEventListener('resize', resizeCanvas);
+        setTimeout(resizeCanvas, 100);
+
+        // MAPS - 6 Levels (More Platforms Added for Multi-Layer Battles!)
+        const MAPS = {
+            'maple_road': {
+                name: '楓之島 - 新手起步旅程',
+                bgColor: '#87CEEB',
+                groundY: 480,
+                monsters: ['snail', 'blue_snail'],
+                platforms: [
+                    {x1: 100, x2: 400, y: 360},
+                    {x1: 450, x2: 700, y: 270},
+                    {x1: 720, x2: 950, y: 360},
+                    {x1: 250, x2: 600, y: 180}
+                ],
+                portals: [
+                    {x: 930, y: 480, target: 'henesys', targetX: 100, label: '往 弓箭手村'}
+                ],
+                decorations: [
+                    {type: 'tree', x: 200, y: 480, size: 1.5},
+                    {type: 'shrub', x: 300, y: 360},
+                    {type: 'flower', x: 700, y: 480}
+                ]
+            },
+            'henesys': {
+                name: '弓箭手村 - 漫步草地平原',
+                bgColor: '#96E072',
+                groundY: 480,
+                monsters: ['blue_snail', 'red_snail', 'slime', 'mushroom'],
+                platforms: [
+                    {x1: 80, x2: 350, y: 350},
+                    {x1: 400, x2: 650, y: 280},
+                    {x1: 680, x2: 920, y: 350},
+                    {x1: 200, x2: 500, y: 190},
+                    {x1: 550, x2: 850, y: 150}
+                ],
+                portals: [
+                    {x: 70, y: 480, target: 'maple_road', targetX: 860, label: '往 楓之島'},
+                    {x: 500, y: 480, target: 'kerning_city', targetX: 100, label: '往 墮落城市'},
+                    {x: 930, y: 480, target: 'ellinia', targetX: 100, label: '往 魔法森林'}
+                ],
+                decorations: [
+                    {type: 'mushroom_house', x: 220, y: 480, scale: 1.3},
+                    {type: 'tree', x: 800, y: 480, size: 1.2}
+                ]
+            },
+            'ellinia': {
+                name: '魔法森林 - 巍峨古木神木',
+                bgColor: '#3E8E41',
+                groundY: 480,
+                monsters: ['slime', 'mushroom', 'stump'],
+                platforms: [
+                    {x1: 50, x2: 350, y: 340},
+                    {x1: 400, x2: 700, y: 280},
+                    {x1: 720, x2: 950, y: 330},
+                    {x1: 150, x2: 400, y: 190},
+                    {x1: 450, x2: 850, y: 140}
+                ],
+                portals: [
+                    {x: 70, y: 480, target: 'henesys', targetX: 860, label: '往 弓箭手村'},
+                    {x: 930, y: 480, target: 'perion', targetX: 100, label: '往 勇士之村'}
+                ],
+                decorations: [
+                    {type: 'big_tree', x: 500, y: 480, scale: 2.2},
+                    {type: 'flower', x: 250, y: 210}
+                ]
+            },
+            'kerning_city': {
+                name: '墮落城市 - 霓虹下水道',
+                bgColor: '#1A202C',
+                groundY: 480,
+                monsters: ['slime', 'wild_boar'],
+                platforms: [
+                    {x1: 50, x2: 300, y: 360},
+                    {x1: 320, x2: 600, y: 280},
+                    {x1: 620, x2: 950, y: 360},
+                    {x1: 200, x2: 450, y: 190},
+                    {x1: 500, x2: 800, y: 160}
+                ],
+                portals: [
+                    {x: 70, y: 480, target: 'henesys', targetX: 450, label: '往 弓箭手村'},
+                    {x: 930, y: 480, target: 'temple', targetX: 100, label: '往 奇幻寺院'}
+                ],
+                decorations: [
+                    {type: 'tree', x: 800, y: 480, size: 1.1},
+                    {type: 'shrub', x: 200, y: 350}
+                ]
+            },
+            'perion': {
+                name: '勇士之村 - 狂風岩石赤山',
+                bgColor: '#D2B48C',
+                groundY: 480,
+                monsters: ['stump', 'wild_boar', 'lupin'],
+                platforms: [
+                    {x1: 50, x2: 300, y: 350},
+                    {x1: 350, x2: 650, y: 260},
+                    {x1: 700, x2: 950, y: 350},
+                    {x1: 150, x2: 500, y: 170},
+                    {x1: 550, x2: 850, y: 130}
+                ],
+                portals: [
+                    {x: 70, y: 480, target: 'ellinia', targetX: 860, label: '往 魔法森林'},
+                    {x: 930, y: 480, target: 'temple', targetX: 100, label: '往 奇幻寺院'}
+                ],
+                decorations: [
+                    {type: 'shrub', x: 500, y: 240}
+                ]
+            },
+            'temple': {
+                name: '奇幻寺院 - 禁忌巴洛古神殿',
+                bgColor: '#2D3748',
+                groundY: 480,
+                monsters: ['drg_soldier', 'balrog'],
+                platforms: [
+                    {x1: 50, x2: 320, y: 360},
+                    {x1: 350, x2: 650, y: 250},
+                    {x1: 680, x2: 950, y: 360},
+                    {x1: 200, x2: 500, y: 160},
+                    {x1: 550, x2: 800, y: 140}
+                ],
+                portals: [
+                    {x: 70, y: 480, target: 'perion', targetX: 860, label: '往 勇士之村'},
+                    {x: 930, y: 480, target: 'kerning_city', targetX: 860, label: '往 墮落城市'}
+                ],
+                decorations: [
+                    {type: 'big_tree', x: 500, y: 480, scale: 1.8}
+                ]
+            }
+        };
+
+        // MONSTERS TEMPLATES (EXP boosted to insane rates for instant level-up!)
+        const MONSTER_TEMPLATES = {
+            'snail': {name: '綠嫩寶', hp: 25, maxHp: 25, speed: 1.1, exp: 2500, color: '#4CAF50', type: 'snail', damage: 4},
+            'blue_snail': {name: '藍寶', hp: 50, maxHp: 50, speed: 1.4, exp: 6800, color: '#2196F3', type: 'snail', damage: 8},
+            'red_snail': {name: '紅寶', hp: 110, maxHp: 110, speed: 1.7, exp: 18000, color: '#F44336', type: 'snail', damage: 18},
+            'slime': {name: '綠水靈', hp: 200, maxHp: 200, speed: 2.0, exp: 45000, color: '#81C784', type: 'slime', damage: 35, canJump: true},
+            'mushroom': {name: '橘子菇菇', hp: 450, maxHp: 450, speed: 2.3, exp: 120000, color: '#FF9800', type: 'mushroom', damage: 65, canJump: true},
+            'stump': {name: '木妖', hp: 900, maxHp: 900, speed: 0.9, exp: 350000, color: '#8B5A2B', type: 'stump', damage: 120},
+            
+            // Advanced Monsters
+            'wild_boar': {name: '緞帶肥肥野豬', hp: 2200, maxHp: 2200, speed: 3.2, exp: 1200000, color: '#4E3629', type: 'wild_boar', damage: 160},
+            'lupin': {name: '風神猴子鲁潘', hp: 5500, maxHp: 5500, speed: 2.3, exp: 3200000, color: '#D7CCC8', type: 'lupin', damage: 290, canJump: true},
+            'drg_soldier': {name: '龍族精靈戰士', hp: 16000, maxHp: 16000, speed: 1.7, exp: 8500000, color: '#311B92', type: 'drg_soldier', damage: 680},
+            'balrog': {name: '地獄巴洛古 (BOSS)', hp: 88000, maxHp: 88000, speed: 1.2, exp: 50000000, color: '#212121', type: 'balrog', damage: 1600, canJump: true}
+        };
+
+        // --- ITEMS DEFINITIONS ---
+        const ITEMS = {
+            // Potions
+            'red_potion': {id: 'red_potion', type: 'consume', name: '紅色藥水', icon: '🔴', desc: '回復 50 HP (售價: 50🪙)', price: 50},
+            'blue_potion': {id: 'blue_potion', type: 'consume', name: '藍色藥水', icon: '🔵', desc: '回復 30 MP (售價: 50🪙)', price: 50},
+            
+            // Weapons
+            'wooden_sword': {id: 'wooden_sword', type: 'weapon', name: '新手木劍', icon: '🪵', desc: '物理攻擊+2，初心者入門配劍 (售價: 100🪙)', price: 100, stats: {att: 2, str: 0}},
+            'red_lotus_sword': {id: 'red_lotus_sword', type: 'weapon', name: '紅蓮之劍', icon: '🔥', desc: '物理攻擊+18, 力量+5 (戰士/槍騎兵專用, 售價: 500🪙)', price: 500, stats: {att: 18, str: 5}},
+            'golden_cross_sword': {id: 'golden_cross_sword', type: 'weapon', name: '黃金十字雙手大劍', icon: '⚔️', desc: '物理攻擊+48, 力量+15 (龍騎士專用, 售價: 1500🪙)', price: 1500, stats: {att: 48, str: 15}},
+            
+            'wooden_wand': {id: 'wooden_wand', type: 'weapon', name: '新手木杖', icon: '🪄', desc: '魔法攻擊+3，法師入門法杖 (售價: 100🪙)', price: 100, stats: {att: 3, int: 0}},
+            'spirit_wand': {id: 'spirit_wand', type: 'weapon', name: '精靈之魂魔杖', icon: '🔮', desc: '魔法攻擊+15, 智力+6 (法師/僧侶專用, 售價: 500🪙)', price: 500, stats: {att: 15, int: 6}},
+            'archangel_staff': {id: 'archangel_staff', type: 'weapon', name: '大天使之神聖長杖', icon: '🔱', desc: '魔法攻擊+42, 智力+18 (祭司專用, 售價: 1500🪙)', price: 1500, stats: {att: 42, int: 18}},
+
+            'rookie_bow': {id: 'rookie_bow', type: 'weapon', name: '新手木弓', icon: '🏹', desc: '遠程物理攻擊+3，弓箭手基礎長弓 (售價: 100🪙)', price: 100, stats: {att: 3, dex: 0}},
+            'falcon_bow': {id: 'falcon_bow', type: 'weapon', name: '獵鷹金紋長弓', icon: '🦅', desc: '遠程攻擊+16, 敏捷+6 (弓箭手/獵人專用, 售價: 500🪙)', price: 500, stats: {att: 16, dex: 6}},
+            'golden_crossbow': {id: 'golden_crossbow', type: 'weapon', name: '黃金十字神弩', icon: '⚡', desc: '遠程攻擊+45, 敏捷+16 (遊俠專用, 售價: 1500🪙)', price: 1500, stats: {att: 45, dex: 16}},
+
+            // Armors
+            'rookie_armor': {id: 'rookie_armor', type: 'armor', name: '冒險家皮甲', icon: '👕', desc: '物理防禦+5 (售價: 100🪙)', price: 100, stats: {def: 5}},
+            'bronze_armor': {id: 'bronze_armor', type: 'armor', name: '青銅鋼鐵鎧甲', icon: '🛡️', desc: '物理防禦+18, 力量+4 (戰士系列專用, 售價: 450🪙)', price: 450, stats: {def: 18, str: 4}},
+            'holy_robe': {id: 'holy_robe', type: 'armor', name: '聖光法術長袍', icon: '🧥', desc: '物理防禦+12, 智力+8 (法師系列專用, 售價: 450🪙)', price: 450, stats: {def: 12, int: 8}},
+            'gale_suit': {id: 'gale_suit', type: 'armor', name: '疾風探險風衣', icon: '👚', desc: '物理防禦+15, 敏捷+7 (弓箭手系列專用, 售價: 450🪙)', price: 450, stats: {def: 15, dex: 7}},
+            
+            'silver_temple_armor': {id: 'silver_temple_armor', type: 'armor', name: '銀色聖殿重裝鎧甲', icon: '🎖️', desc: '物理防禦+48, 力量+14 (戰士頂級套裝, 售價: 1200🪙)', price: 1200, stats: {def: 48, str: 14}},
+            'sage_robe': {id: 'sage_robe', type: 'armor', name: '大賢者秘奧法袍', icon: '🌠', desc: '物理防禦+32, 智力+18 (法師頂級套裝, 售價: 1200🪙)', price: 1200, stats: {def: 32, int: 18}},
+            'marksman_coat': {id: 'marksman_coat', type: 'armor', name: '神射手風暴夾克', icon: '💨', desc: '物理防禦+38, 敏捷+15 (弓箭手頂級套裝, 售價: 1200🪙)', price: 1200, stats: {def: 38, dex: 15}}
+        };
+
+        // --- PLAYER CONFIG ---
+        let player = {
+            // Coordinates & Movement
+            x: 100,
+            y: 400,
+            vx: 0,
+            vy: 0,
+            width: 40,
+            height: 60,
+            facing: 'right', // 'left' / 'right'
+            state: 'idle', // 'idle', 'walk', 'jump', 'attack'
+            grounded: false,
+
+            // Stats
+            level: 1,
+            exp: 0,
+            nextExp: 50,
+            hp: 100,
+            maxHp: 100,
+            mp: 50,
+            maxMp: 50,
+            mesos: 200,
+
+            // Job Advancement Tree (Magician / all first job transitions set to Lv. 8!)
+            job: 'Beginner', 
+            jobRank: 0, 
+
+            // Core Attributes
+            str: 4,
+            dex: 4,
+            int: 4,
+            luk: 4,
+            ap: 0,
+            sp: 0,
+
+            // Active Equipped Items
+            equipped: {
+                weapon: 'wooden_sword',
+                armor: 'rookie_armor'
+            },
+
+            // Skills (Levels)
+            skills: {
+                // Warrior
+                'slash_blast': 0,
+                'ground_smash': 0,
+                'dragon_roar': 0,
+                // Magician
+                'magic_claw': 0,
+                'heal': 0,
+                'shining_ray': 0,
+                // Archer
+                'double_shot': 0,
+                'arrow_bomb': 0,
+                'arrow_rain': 0
+            },
+
+            // Inventory quantities
+            inventory: {
+                potions: {
+                    red_potion: 5,
+                    blue_potion: 5
+                },
+                equips: [
+                    'wooden_sword',
+                    'rookie_armor'
+                ],
+                etc_loot: 0
+            },
+
+            // Action lock timings
+            lastAttackTime: 0,
+            attackCooldown: 250, // ms
+            lastHitTime: 0
+        };
+
+        // World State Elements
+        let currentMapKey = 'maple_road';
+        let monsters = [];
+        let drops = [];
+        let arrows = []; // Projectiles for Archer
+        let particles = [];
+        let damageTexts = [];
+        let skillEffects = [];
+        let keyState = {};
+        let gameRunning = false;
+
+        let cameraX = 0;
+        let activeWindows = { status: false, inventory: false, skills: false, shop: false, keyconfig: false };
+        let activeInventoryTab = 'consume'; 
+        let activeShopTab = 'potions'; 
+
+        let lastMonsterSpawn = 0;
+        const SPAWN_INTERVAL = 1200; // Spawn much faster!
+
+        // --- KEYWORD & RE-BINDINGS OVERRIDES (FASTER & HIGHER JUMPS) ---
+        const PLAYER_RUN_SPEED = 6.8; // Speed up
+        const PLAYER_JUMP_FORCE = -12.8; // Jump higher
+        const PHYSICS_GRAVITY = 0.44; // Fall logic
+
+        window.addEventListener('keydown', e => {
+            let keyName = e.key;
+            if (keyName === ' ') keyName = 'Space';
+            if (keyName === 'Control') keyName = 'Ctrl';
+            if (e.code === 'Space') keyName = 'Space';
+            if (e.code === 'ControlLeft' || e.code === 'ControlRight') keyName = 'Ctrl';
+
+            // Custom Keybinding Assignment Mode
+            if (bindingAction) {
+                e.preventDefault();
+                keyBinds[bindingAction] = keyName;
+                localStorage.setItem('maple_keys_v2', JSON.stringify(keyBinds));
+                toast(`成功將 [${ACTION_LABELS[bindingAction]}] 綁定到按鍵 [${keyName}]!`, 'bg-emerald-800');
+                bindingAction = null;
+                updateUI();
+                updateKeyConfigUI();
+                return;
+            }
+
+            keyState[keyName] = true;
+
+            // Block standard system keyboard overrides for gameplay controls to prevent browser conflicts (including Ctrl!)
+            const boundKeysList = Object.values(keyBinds);
+            if (boundKeysList.includes(keyName) || ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Space', 'Alt', 'Control', 'Ctrl'].includes(keyName)) {
+                e.preventDefault();
+            }
+
+            // Quick Hotkeys
+            if (keyName === keyBinds.pick) triggerPickUp();
+            if (keyName === keyBinds.redPot) usePotion('red_potion');
+            if (keyName === keyBinds.bluePot) usePotion('blue_potion');
+            if (keyName === keyBinds.portal) triggerPortalManual();
+        });
+
+        window.addEventListener('keyup', e => {
+            let keyName = e.key;
+            if (keyName === ' ') keyName = 'Space';
+            if (keyName === 'Control') keyName = 'Ctrl';
+            if (e.code === 'Space') keyName = 'Space';
+            if (e.code === 'ControlLeft' || e.code === 'ControlRight') keyName = 'Ctrl';
+
+            keyState[keyName] = false;
+        });
+
+        // --- MAPS PORTAL DETECTION OVERLAY DISPLAY ---
+        function checkPortalProximity() {
+            const currentMap = MAPS[currentMapKey];
+            let nearPortal = false;
+            currentMap.portals.forEach(portal => {
+                const dist = Math.abs((player.x + player.width/2) - portal.x);
+                if (dist < 45 && player.grounded) {
+                    nearPortal = true;
+                }
+            });
+
+            const hint = document.getElementById('portal-hint');
+            if (nearPortal) {
+                hint.classList.remove('hidden');
+            } else {
+                hint.classList.add('hidden');
+            }
+        }
+
+        function triggerPortalManual() {
+            const currentMap = MAPS[currentMapKey];
+            currentMap.portals.forEach(portal => {
+                const dist = Math.abs((player.x + player.width/2) - portal.x);
+                if (dist < 50) {
+                    currentMapKey = portal.target;
+                    player.x = portal.targetX;
+                    player.y = 400;
+                    player.vx = 0;
+                    player.vy = 0;
+                    monsters = [];
+                    drops = [];
+                    arrows = [];
+                    toast(`進入地圖: ${MAPS[portal.target].name}`, 'bg-cyan-800');
+                    playSfx(523, 'sine', 0.2, 0.15);
+                    setTimeout(() => playSfx(659, 'sine', 0.2, 0.2), 80);
+                    
+                    // Consume key up triggers immediately
+                    keyState[keyBinds.portal] = false;
+                }
+            });
+            updateUI();
+        }
+
+        // Window Draggability Handler
+        function makeDraggable(header, win) {
+            let p1 = 0, p2 = 0, p3 = 0, p4 = 0;
+            header.onmousedown = mDown;
+            header.ontouchstart = tStart;
+
+            function mDown(e) {
+                e = e || window.event;
+                e.preventDefault();
+                p3 = e.clientX;
+                p4 = e.clientY;
+                document.onmouseup = stopDrag;
+                document.onmousemove = dragMove;
+            }
+
+            function tStart(e) {
+                p3 = e.touches[0].clientX;
+                p4 = e.touches[0].clientY;
+                document.ontouchend = stopDrag;
+                document.ontouchmove = dragTouchMove;
+            }
+
+            function dragMove(e) {
+                e = e || window.event;
+                e.preventDefault();
+                p1 = p3 - e.clientX;
+                p2 = p4 - e.clientY;
+                p3 = e.clientX;
+                p4 = e.clientY;
+                win.style.top = (win.offsetTop - p2) + "px";
+                win.style.left = (win.offsetLeft - p1) + "px";
+            }
+
+            function dragTouchMove(e) {
+                p1 = p3 - e.touches[0].clientX;
+                p2 = p4 - e.touches[0].clientY;
+                p3 = e.touches[0].clientX;
+                p4 = e.touches[0].clientY;
+                win.style.top = (win.offsetTop - p2) + "px";
+                win.style.left = (win.offsetLeft - p1) + "px";
+            }
+
+            function stopDrag() {
+                document.onmouseup = null;
+                document.onmousemove = null;
+                document.ontouchend = null;
+                document.ontouchmove = null;
+            }
+        }
+
+        document.querySelectorAll('.maple-window').forEach(win => {
+            const header = win.querySelector('.maple-window-header');
+            if (header) makeDraggable(header, win);
+        });
+
+        // --- TOAST NOTIFICATIONS ---
+        function toast(text, color = 'bg-slate-900') {
+            const container = document.getElementById('toast-container');
+            const item = document.createElement('div');
+            item.className = `${color} border-l-4 border-amber-400 text-white text-xs px-3 py-2 rounded shadow-2xl flex items-center gap-2 transition-all duration-300 opacity-0 transform translate-y-3`;
+            item.innerHTML = `<i class="fa-solid fa-circle-info text-amber-400"></i> ${text}`;
+            container.appendChild(item);
+            setTimeout(() => item.classList.remove('opacity-0', 'translate-y-3'), 15);
+            setTimeout(() => {
+                item.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => item.remove(), 300);
+            }, 2500);
+        }
+
+        function toggleWindow(name) {
+            const win = document.getElementById(`window-${name}`);
+            activeWindows[name] = !activeWindows[name];
+            if (activeWindows[name]) {
+                win.classList.remove('hidden');
+                initAudio();
+                playSfx(480, 'triangle', 0.08, 0.1);
+            } else {
+                win.classList.add('hidden');
+            }
+            updateUI();
+        }
+
+        function respawnPlayer() {
+            document.getElementById('death-overlay').classList.add('hidden');
+            player.hp = player.maxHp;
+            player.mp = player.maxMp;
+            player.x = 100;
+            player.y = 400;
+            player.vx = 0;
+            player.vy = 0;
+            currentMapKey = 'maple_road';
+            monsters = [];
+            drops = [];
+            arrows = [];
+            toast("你回歸新手村，重新啟程！", "bg-emerald-900");
+            updateUI();
+        }
+
+        // --- ADVANCED JOB SYSTEM CODE ---
+        function checkJobAdvancementAvailable() {
+            const btn = document.getElementById('btn-job-advance');
+            const alertBanner = document.getElementById('job-advance-alert');
+            
+            let canAdvance = false;
+            let btnText = "";
+            
+            // Level 8 is the new gate for 1st Job Advancement (especially Magicians!)
+            if (player.level >= 8 && player.jobRank === 0) {
+                canAdvance = true;
+                btnText = "進行 1轉 選擇!";
+            } else if (player.level >= 30 && player.jobRank === 1) {
+                canAdvance = true;
+                btnText = "進行 2轉 選擇!";
+            } else if (player.level >= 50 && player.jobRank === 2) {
+                canAdvance = true;
+                btnText = "進行 3轉 選擇!";
+            }
+            
+            if (canAdvance) {
+                btn.classList.remove('hidden');
+                btn.innerText = btnText;
+                alertBanner.classList.remove('hidden');
+            } else {
+                btn.classList.add('hidden');
+                alertBanner.classList.add('hidden');
+            }
+        }
+
+        function showJobAdvanceMenu() {
+            const menu = document.getElementById('window-job-picker');
+            const desc = document.getElementById('job-picker-desc');
+            const optionsBox = document.getElementById('job-options-list');
+            
+            menu.classList.remove('hidden');
+            optionsBox.innerHTML = '';
+
+            if (player.jobRank === 0) {
+                desc.innerText = "恭喜冒險家達到 8 級！請選擇 1轉 職業：";
+                optionsBox.innerHTML = `
+                    <button onclick="advanceJob('Warrior')" class="w-full bg-gradient-to-r from-red-600 to-amber-600 text-white font-bold p-2.5 rounded hover:brightness-110 mb-1">🛡️ 戰士 (Warrior)</button>
+                    <button onclick="advanceJob('Magician')" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold p-2.5 rounded hover:brightness-110 mb-1">🔮 法師 (Magician)</button>
+                    <button onclick="advanceJob('Archer')" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold p-2.5 rounded hover:brightness-110">🏹 弓箭手 (Archer)</button>
+                `;
+            } else if (player.jobRank === 1) {
+                desc.innerText = "強大的修煉達到 30 級！請進修 2轉 職業：";
+                if (player.job === 'Warrior') {
+                    optionsBox.innerHTML = `<button onclick="advanceJob('Spearman')" class="w-full bg-gradient-to-r from-red-700 to-amber-700 text-white font-bold p-2.5 rounded hover:brightness-110">🔱 槍騎兵 (Spearman)</button>`;
+                } else if (player.job === 'Magician') {
+                    optionsBox.innerHTML = `<button onclick="advanceJob('Cleric')" class="w-full bg-gradient-to-r from-blue-700 to-sky-600 text-white font-bold p-2.5 rounded hover:brightness-110">⛪ 僧侶 (Cleric)</button>`;
+                } else if (player.job === 'Archer') {
+                    optionsBox.innerHTML = `<button onclick="advanceJob('Hunter')" class="w-full bg-gradient-to-r from-emerald-700 to-lime-600 text-white font-bold p-2.5 rounded hover:brightness-110">🎯 獵人 (Hunter)</button>`;
+                }
+            } else if (player.jobRank === 2) {
+                desc.innerText = "威名顯赫達到 50 級！完成試煉挑戰 3轉 職業：";
+                if (player.job === 'Spearman') {
+                    optionsBox.innerHTML = `<button onclick="advanceJob('DragonKnight')" class="w-full bg-gradient-to-r from-red-950 to-red-600 text-white font-bold p-2.5 rounded hover:brightness-110">🐉 龍騎士 (DragonKnight)</button>`;
+                } else if (player.job === 'Cleric') {
+                    optionsBox.innerHTML = `<button onclick="advanceJob('Priest')" class="w-full bg-gradient-to-r from-yellow-500 to-amber-600 text-white font-bold p-2.5 rounded hover:brightness-110">😇 祭司 (Priest)</button>`;
+                } else if (player.job === 'Hunter') {
+                    optionsBox.innerHTML = `<button onclick="advanceJob('Ranger')" class="w-full bg-gradient-to-r from-cyan-600 to-teal-800 text-white font-bold p-2.5 rounded hover:brightness-110">🦅 遊俠 (Ranger)</button>`;
+                }
+            }
+        }
+
+        function advanceJob(newJob) {
+            player.job = newJob;
+            player.jobRank++;
+            player.sp += 5; // Extra bonus skills pts
+            
+            sfxAdvancement();
+            
+            // Skill unlocks & defaults triggers
+            if (newJob === 'Warrior') player.skills.slash_blast = 1;
+            if (newJob === 'Magician') player.skills.magic_claw = 1;
+            if (newJob === 'Archer') player.skills.double_shot = 1;
+            if (newJob === 'Spearman') player.skills.ground_smash = 1;
+            if (newJob === 'Cleric') player.skills.heal = 1;
+            if (newJob === 'Hunter') player.skills.arrow_bomb = 1;
+            if (newJob === 'DragonKnight') player.skills.dragon_roar = 1;
+            if (newJob === 'Priest') player.skills.shining_ray = 1;
+            if (newJob === 'Ranger') player.skills.arrow_rain = 1;
+
+            document.getElementById('window-job-picker').classList.add('hidden');
+            
+            toast(`🎉 轉職完成！恭喜你成為全新的強者：[${getJobTitleName(newJob)}]`, 'bg-gradient-to-r from-purple-600 to-indigo-600 font-black');
+            updateUI();
+        }
+
+        function getJobTitleName(j) {
+            const names = {
+                'Beginner': '初心者',
+                'Warrior': '戰士', 'Spearman': '槍騎兵', 'DragonKnight': '龍騎士',
+                'Magician': '法師', 'Cleric': '僧侶', 'Priest': '祭司',
+                'Archer': '弓箭手', 'Hunter': '獵人', 'Ranger': '遊俠'
+            };
+            return names[j] || j;
+        }
+
+        // --- ATTRIBUTES & EQUIPMENT CALCULATORS ---
+        function getPlayerTotalStats() {
+            let strBonus = 0;
+            let dexBonus = 0;
+            let intBonus = 0;
+            let lukBonus = 0;
+            let weaponAttBonus = 0;
+            let armorDefBonus = 0;
+
+            // Weapon properties
+            const wpKey = player.equipped.weapon;
+            if (wpKey && ITEMS[wpKey]) {
+                const item = ITEMS[wpKey];
+                weaponAttBonus = item.stats.att || 0;
+                if (item.stats.str) strBonus += item.stats.str;
+                if (item.stats.dex) dexBonus += item.stats.dex;
+                if (item.stats.int) intBonus += item.stats.int;
+            }
+
+            // Armor properties
+            const arKey = player.equipped.armor;
+            if (arKey && ITEMS[arKey]) {
+                const item = ITEMS[arKey];
+                armorDefBonus = item.stats.def || 0;
+                if (item.stats.str) strBonus += item.stats.str;
+                if (item.stats.dex) dexBonus += item.stats.dex;
+                if (item.stats.int) intBonus += item.stats.int;
+            }
+
+            // Calculations
+            const finalStr = player.str + strBonus;
+            const finalDex = player.dex + dexBonus;
+            const finalInt = player.int + intBonus;
+            const finalLuk = player.luk + lukBonus;
+
+            // Attack values
+            let minDmg = 0;
+            let maxDmg = 0;
+
+            if (player.job === 'Magician' || player.job === 'Cleric' || player.job === 'Priest') {
+                minDmg = Math.max(1, Math.floor(finalInt * 1.5 + weaponAttBonus * 0.8));
+                maxDmg = Math.floor(finalInt * 2.8 + weaponAttBonus * 1.5);
+            } else if (player.job === 'Archer' || player.job === 'Hunter' || player.job === 'Ranger') {
+                minDmg = Math.max(1, Math.floor(finalDex * 1.4 + weaponAttBonus * 0.8));
+                maxDmg = Math.floor(finalDex * 2.6 + weaponAttBonus * 1.5);
+            } else { // Warriors / Beginners
+                minDmg = Math.max(1, Math.floor(finalStr * 1.5 + weaponAttBonus * 0.8));
+                maxDmg = Math.floor(finalStr * 2.8 + weaponAttBonus * 1.5);
+            }
+
+            // Defense values
+            const finalDef = Math.floor(finalDex * 0.6 + finalStr * 0.3 + armorDefBonus);
+
+            return {
+                str: finalStr,
+                dex: finalDex,
+                int: finalInt,
+                luk: finalLuk,
+                minDmg: minDmg,
+                maxDmg: maxDmg,
+                def: finalDef,
+                weaponAtt: weaponAttBonus,
+                armorDef: armorDefBonus
+            };
+        }
+
+        function equipItem(itemKey) {
+            const item = ITEMS[itemKey];
+            if (!item) return;
+
+            // Job restrictions logic
+            if (itemKey.includes('lotus') && !['Warrior', 'Spearman', 'DragonKnight'].includes(player.job)) {
+                toast("此武器限制 [戰士/槍騎兵/龍騎士] 使用！", "bg-red-800");
+                return;
+            }
+            if (itemKey.includes('cross_sword') && player.job !== 'DragonKnight') {
+                toast("此武器唯有 [3轉龍騎士] 才能揮舞！", "bg-red-800");
+                return;
+            }
+            if (itemKey.includes('spirit_wand') && !['Magician', 'Cleric', 'Priest'].includes(player.job)) {
+                toast("此法杖限制 [法師/僧侶/祭司] 使用！", "bg-red-800");
+                return;
+            }
+            if (itemKey.includes('archangel') && player.job !== 'Priest') {
+                toast("此法杖唯有 [3轉聖祭司] 才能持有！", "bg-red-800");
+                return;
+            }
+            if (itemKey.includes('falcon_bow') && !['Archer', 'Hunter', 'Ranger'].includes(player.job)) {
+                toast("此弓箭限制 [弓箭手/獵人/遊俠] 使用！", "bg-red-800");
+                return;
+            }
+            if (itemKey.includes('golden_crossbow') && player.job !== 'Ranger') {
+                toast("此神弩唯有 [3轉遊俠] 才能拉弦！", "bg-red-800");
+                return;
+            }
+
+            // Armor restrictions logic
+            if (itemKey === 'bronze_armor' && !['Warrior', 'Spearman', 'DragonKnight'].includes(player.job)) {
+                toast("此防具限制 戰士系列 職業穿著！"); return;
+            }
+            if (itemKey === 'holy_robe' && !['Magician', 'Cleric', 'Priest'].includes(player.job)) {
+                toast("此長袍限制 法師系列 職業穿著！"); return;
+            }
+            if (itemKey === 'gale_suit' && !['Archer', 'Hunter', 'Ranger'].includes(player.job)) {
+                toast("此風衣限制 弓箭手系列 職業穿著！"); return;
+            }
+            if (itemKey === 'silver_temple_armor' && !['Spearman', 'DragonKnight'].includes(player.job)) {
+                toast("此頂級重甲限制 2轉/3轉戰士 穿著！"); return;
+            }
+            if (itemKey === 'sage_robe' && !['Cleric', 'Priest'].includes(player.job)) {
+                toast("此頂級法袍限制 2轉/3轉法師 穿著！"); return;
+            }
+            if (itemKey === 'marksman_coat' && !['Hunter', 'Ranger'].includes(player.job)) {
+                toast("此頂級風衣限制 2轉/3轉弓箭手 穿著！"); return;
+            }
+
+            // Perform Swap Swap Swap
+            const slot = item.type; // 'weapon' or 'armor'
+            const currentEquipped = player.equipped[slot];
+            
+            // Put current back in inventory
+            if (currentEquipped) {
+                player.inventory.equips.push(currentEquipped);
+            }
+
+            // Strip from inventory
+            const idx = player.inventory.equips.indexOf(itemKey);
+            if (idx > -1) {
+                player.inventory.equips.splice(idx, 1);
+            }
+
+            player.equipped[slot] = itemKey;
+            playSfx(900, 'sine', 0.1, 0.2);
+            toast(`成功裝備了 ${item.name}!`, "bg-blue-800");
+            updateUI();
+        }
+
+        function unequipItem(slot) {
+            const current = player.equipped[slot];
+            if (!current) return;
+
+            player.inventory.equips.push(current);
+            player.equipped[slot] = null;
+            playSfx(400, 'sine', 0.08, 0.1);
+            toast("解除裝備！");
+            updateUI();
+        }
+
+        // --- INVENTORY TAB SWITCHES ---
+        function setInventoryTab(tab) {
+            activeInventoryTab = tab;
+            const btnConsume = document.getElementById('tab-consume');
+            const btnEquip = document.getElementById('tab-equip');
+
+            if (tab === 'consume') {
+                btnConsume.className = "px-3 py-1 bg-blue-500 text-white rounded";
+                btnEquip.className = "px-3 py-1 bg-slate-300 text-slate-700 rounded hover:bg-blue-100";
+            } else {
+                btnConsume.className = "px-3 py-1 bg-slate-300 text-slate-700 rounded hover:bg-blue-100";
+                btnEquip.className = "px-3 py-1 bg-blue-500 text-white rounded";
+            }
+            updateUI();
+        }
+
+        // --- SHOP TABS ---
+        function setShopTab(tab) {
+            activeShopTab = tab;
+            const btnPots = document.getElementById('shop-tab-potions');
+            const btnWeps = document.getElementById('shop-tab-weapons');
+
+            if (tab === 'potions') {
+                btnPots.className = "px-2.5 py-1 bg-amber-500 text-white rounded";
+                btnWeps.className = "px-2.5 py-1 bg-slate-200 text-slate-700 rounded hover:bg-slate-300";
+            } else {
+                btnPots.className = "px-2.5 py-1 bg-slate-200 text-slate-700 rounded hover:bg-slate-300";
+                btnWeps.className = "px-2.5 py-1 bg-amber-500 text-white rounded";
+            }
+            populateShopItems();
+        }
+
+        // --- PHYSICS & PLAYER ACTIONS ---
+        function triggerAttack() {
+            if (player.hp <= 0) return;
+            const now = Date.now();
+            if (now - player.lastAttackTime < player.attackCooldown) return;
+
+            player.lastAttackTime = now;
+            player.state = 'attack';
+
+            const isArcher = ['Archer', 'Hunter', 'Ranger'].includes(player.job);
+            
+            if (isArcher) {
+                sfxBow();
+                fireArrowProjectile('arrow', 1.0);
+            } else {
+                sfxAttack();
+                // Normal physical slash sweep
+                let range = 65;
+                let hitX = player.facing === 'right' ? player.x + player.width : player.x - range;
+                let hitY = player.y;
+
+                skillEffects.push({
+                    type: 'slash',
+                    x: hitX + range/2,
+                    y: hitY + 30,
+                    facing: player.facing,
+                    maxFrames: 6,
+                    frame: 0
+                });
+
+                checkPhysicalMeleeHit(hitX, hitY, range, 60, false, 1.0);
+            }
+        }
+
+        // Fired with lowered Y and increased Height Hitbox to guarantee ground-skimming hits!
+        function fireArrowProjectile(type, multiplier = 1.0) {
+            const startX = player.facing === 'right' ? player.x + player.width : player.x;
+            const startY = player.y + 36; // Fired closer to the ground to hit small snails!
+            const velocity = player.facing === 'right' ? 13 : -13;
+
+            arrows.push({
+                type: type, 
+                x: startX,
+                y: startY,
+                vx: velocity,
+                vy: 0,
+                width: 24, // Wider arrow
+                height: 12, // Taller hitbox to easily intersect all monster frames
+                facing: player.facing,
+                dmgMultiplier: multiplier,
+                active: true
+            });
+        }
+
+        function triggerSkill() {
+            if (player.hp <= 0) return;
+            const now = Date.now();
+            
+            if (player.jobRank === 0) {
+                toast("初心者無法使用法術技能，請先於屬性欄點選「轉職」！");
+                return;
+            }
+
+            // WARRIOR SKILLS
+            if (player.job === 'Warrior') { // 1轉 狂暴攻擊
+                if (player.mp < 12) { toast("魔力不足！需要 12 MP"); return; }
+                player.mp -= 12;
+                player.lastAttackTime = now;
+                player.state = 'attack';
+                sfxAttack();
+
+                let w = 150;
+                let h = 80;
+                let hitX = player.facing === 'right' ? player.x + player.width : player.x - w;
+                
+                skillEffects.push({
+                    type: 'slash_blast',
+                    x: hitX + w/2,
+                    y: player.y + 30,
+                    facing: player.facing,
+                    maxFrames: 10,
+                    frame: 0
+                });
+                checkPhysicalMeleeHit(hitX, player.y - 10, w, h, true, 1.8 + player.skills.slash_blast * 0.1);
+            } 
+            else if (player.job === 'Spearman') { // 2轉 地面崩裂
+                if (player.mp < 20) { toast("魔力不足！需要 20 MP"); return; }
+                player.mp -= 20;
+                player.lastAttackTime = now;
+                player.state = 'attack';
+                playSfx(120, 'sawtooth', 0.4, 0.3);
+
+                let w = 220;
+                let hitX = player.facing === 'right' ? player.x + player.width : player.x - w;
+
+                skillEffects.push({
+                    type: 'ground_smash',
+                    x: hitX + w/2,
+                    y: 470,
+                    facing: player.facing,
+                    maxFrames: 12,
+                    frame: 0
+                });
+                checkPhysicalMeleeHit(hitX, player.y - 20, w, 90, true, 2.5 + player.skills.ground_smash * 0.15);
+            }
+            else if (player.job === 'DragonKnight') { // 3轉 龍之獻祭
+                if (player.mp < 40) { toast("魔力不足！需要 40 MP"); return; }
+                player.mp -= 40;
+                player.lastAttackTime = now;
+                player.state = 'attack';
+                playSfx(80, 'sawtooth', 0.7, 0.45);
+                setTimeout(() => playSfx(200, 'sine', 0.4, 0.3), 100);
+
+                skillEffects.push({
+                    type: 'dragon_roar',
+                    x: player.x + player.width/2,
+                    y: player.y + 20,
+                    maxFrames: 25,
+                    frame: 0
+                });
+
+                monsters.forEach(m => {
+                    if (m.hp <= 0) return;
+                    applySkillDamageToMonster(m, 4.5 + player.skills.dragon_roar * 0.3);
+                });
+            }
+
+            // MAGICIAN SKILLS
+            else if (player.job === 'Magician') { // 1轉 魔力爪
+                if (player.mp < 15) { toast("魔力不足！需要 15 MP"); return; }
+                player.mp -= 15;
+                player.lastAttackTime = now;
+                player.state = 'attack';
+                playSfx(750, 'sine', 0.15, 0.2);
+
+                let targetX = player.facing === 'right' ? player.x + 120 : player.x - 120;
+                skillEffects.push({
+                    type: 'magic_claw',
+                    x: targetX,
+                    y: player.y + 10,
+                    facing: player.facing,
+                    maxFrames: 12,
+                    frame: 0
+                });
+
+                let w = 180;
+                let hitX = player.facing === 'right' ? player.x : player.x - w;
+                checkMagicalClawHit(hitX, player.y - 20, w, 90, 1.0 + player.skills.magic_claw * 0.08);
+            }
+            else if (player.job === 'Cleric') { // 2轉 聖光治癒
+                if (player.mp < 24) { toast("魔力不足！需要 24 MP"); return; }
+                player.mp -= 24;
+                player.lastAttackTime = now;
+                player.state = 'attack';
+                playSfx(880, 'sine', 0.3, 0.25);
+
+                const healing = Math.floor(player.maxHp * 0.35 + player.skills.heal * 5);
+                player.hp = Math.min(player.maxHp, player.hp + healing);
+                toast(`💡 聖光治癒！恢復了 ${healing} HP`, 'bg-indigo-900');
+
+                skillEffects.push({
+                    type: 'heal_wave',
+                    x: player.x + player.width/2,
+                    y: player.y + player.height/2,
+                    maxFrames: 16,
+                    frame: 0
+                });
+
+                monsters.forEach(m => {
+                    const dist = Math.abs((player.x + player.width/2) - (m.x + m.width/2));
+                    if (dist < 180 && m.hp > 0) {
+                        applySkillDamageToMonster(m, 1.8 + player.skills.heal * 0.1, true); 
+                    }
+                });
+            }
+            else if (player.job === 'Priest') { // 3轉 聖光十字
+                if (player.mp < 45) { toast("魔力不足！需要 45 MP"); return; }
+                player.mp -= 45;
+                player.lastAttackTime = now;
+                player.state = 'attack';
+                playSfx(1000, 'triangle', 0.5, 0.3);
+
+                skillEffects.push({
+                    type: 'shining_ray',
+                    x: player.x + player.width/2,
+                    y: player.y + player.height/2,
+                    maxFrames: 30,
+                    frame: 0
+                });
+
+                monsters.forEach(m => {
+                    if (m.hp <= 0) return;
+                    applySkillDamageToMonster(m, 5.0 + player.skills.shining_ray * 0.4, true);
+                });
+            }
+
+            // ARCHER SKILLS
+            else if (player.job === 'Archer') { // 1轉 雙重射擊
+                if (player.mp < 10) { toast("魔力不足！需要 10 MP"); return; }
+                player.mp -= 10;
+                player.lastAttackTime = now;
+                player.state = 'attack';
+                
+                sfxBow();
+                fireArrowProjectile('arrow', 0.9 + player.skills.double_shot * 0.05);
+                setTimeout(() => {
+                    if (player.hp > 0) {
+                        sfxBow();
+                        fireArrowProjectile('arrow', 0.9 + player.skills.double_shot * 0.05);
+                    }
+                }, 100);
+            }
+            else if (player.job === 'Hunter') { // 2轉 炸彈箭
+                if (player.mp < 20) { toast("魔力不足！需要 20 MP"); return; }
+                player.mp -= 20;
+                player.lastAttackTime = now;
+                player.state = 'attack';
+                sfxBow();
+                fireArrowProjectile('bomb_arrow', 2.0 + player.skills.arrow_bomb * 0.15);
+            }
+            else if (player.job === 'Ranger') { // 3轉 箭雨
+                if (player.mp < 35) { toast("魔力不足！需要 35 MP"); return; }
+                player.mp -= 35;
+                player.lastAttackTime = now;
+                player.state = 'attack';
+                playSfx(400, 'sawtooth', 0.3, 0.2);
+
+                skillEffects.push({
+                    type: 'arrow_rain',
+                    x: player.x + (player.facing === 'right' ? 220 : -220),
+                    y: 200,
+                    maxFrames: 25,
+                    frame: 0
+                });
+
+                const focusX = player.x + (player.facing === 'right' ? 220 : -220);
+                monsters.forEach(m => {
+                    const dist = Math.abs((m.x + m.width/2) - focusX);
+                    if (dist < 150 && m.hp > 0) {
+                        applySkillDamageToMonster(m, 4.8 + player.skills.arrow_rain * 0.3);
+                    }
+                });
+            }
+
+            updateUI();
+        }
+
+        // Hit logic formulas
+        function checkPhysicalMeleeHit(hx, hy, hw, hh, isSkill, multiplier) {
+            let hits = 0;
+            const maxHits = isSkill ? 6 : 1;
+            const stats = getPlayerTotalStats();
+
+            monsters.forEach(m => {
+                if (m.hp <= 0 || hits >= maxHits) return;
+                if (hx + hw > m.x && hx < m.x + m.width &&
+                    hy + hh > m.y && hy < m.y + m.height) {
+                    
+                    let base = Math.floor(Math.random() * (stats.maxDmg - stats.minDmg + 1)) + stats.minDmg;
+                    base = Math.floor(base * multiplier);
+
+                    let crit = Math.random() < 0.2 + (stats.luk * 0.01);
+                    if (crit) base = Math.floor(base * 1.5);
+
+                    m.hp -= base;
+                    playSfx(100, 'sawtooth', 0.15, 0.2);
+                    createDamageText(base, m.x + m.width/2, m.y - 10, crit);
+
+                    m.vx = player.facing === 'right' ? 4 : -4;
+                    m.tintFrames = 8;
+
+                    if (m.hp <= 0 && !m.dead) handleMonsterDeath(m);
+                    hits++;
+                }
+            });
+        }
+
+        function checkMagicalClawHit(hx, hy, hw, hh, multiplier) {
+            let hits = 0;
+            const stats = getPlayerTotalStats();
+
+            monsters.forEach(m => {
+                if (m.hp <= 0 || hits >= 2) return;
+                if (hx + hw > m.x && hx < m.x + m.width &&
+                    hy + hh > m.y && hy < m.y + m.height) {
+                    
+                    let totalDmg = Math.floor(Math.random() * (stats.maxDmg - stats.minDmg + 1)) + stats.minDmg;
+                    totalDmg = Math.floor(totalDmg * multiplier);
+
+                    let crit = Math.random() < 0.2 + (stats.luk * 0.01);
+                    if (crit) totalDmg = Math.floor(totalDmg * 1.5);
+
+                    let dmg1 = Math.floor(totalDmg * 0.5);
+                    let dmg2 = totalDmg - dmg1;
+
+                    m.hp -= dmg1;
+                    createDamageText(dmg1, m.x + m.width/2, m.y - 5, crit);
+                    m.tintFrames = 10;
+
+                    setTimeout(() => {
+                        if (m.hp > 0) {
+                            m.hp -= dmg2;
+                            createDamageText(dmg2, m.x + m.width/2, m.y - 25, crit);
+                            if (m.hp <= 0 && !m.dead) handleMonsterDeath(m);
+                        }
+                    }, 120);
+
+                    m.vx = player.facing === 'right' ? 2 : -2;
+                    hits++;
+                }
+            });
+        }
+
+        function applySkillDamageToMonster(m, multiplier, holy = false) {
+            const stats = getPlayerTotalStats();
+            let base = Math.floor(Math.random() * (stats.maxDmg - stats.minDmg + 1)) + stats.minDmg;
+            base = Math.floor(base * multiplier);
+
+            let crit = Math.random() < 0.25;
+            if (crit) base = Math.floor(base * 1.6);
+
+            m.hp -= base;
+            m.tintFrames = 12;
+            m.vx = Math.random() < 0.5 ? 3 : -3;
+
+            createDamageText(base, m.x + m.width/2, m.y - 15, crit);
+            if (m.hp <= 0 && !m.dead) handleMonsterDeath(m);
+        }
+
+        // --- ARROWS projectile movement and hits ---
+        function runArrowPhysics() {
+            arrows.forEach(arr => {
+                if (!arr.active) return;
+                arr.x += arr.vx;
+
+                if (arr.x < 0 || arr.x > 1000) {
+                    arr.active = false;
+                    return;
+                }
+
+                monsters.forEach(m => {
+                    if (m.hp <= 0 || !arr.active) return;
+                    if (arr.x + arr.width > m.x && arr.x < m.x + m.width &&
+                        arr.y + arr.height > m.y && arr.y < m.y + m.height) {
+                        
+                        arr.active = false; 
+
+                        if (arr.type === 'bomb_arrow') {
+                            playSfx(140, 'sawtooth', 0.35, 0.3);
+                            skillEffects.push({
+                                type: 'explosion',
+                                x: m.x + m.width/2,
+                                y: m.y + m.height/2,
+                                maxFrames: 15,
+                                frame: 0
+                            });
+
+                            monsters.forEach(other => {
+                                const dist = Math.abs((m.x + m.width/2) - (other.x + other.width/2));
+                                if (dist < 120 && other.hp > 0) {
+                                    applySkillDamageToMonster(other, arr.dmgMultiplier);
+                                    other.vx = arr.vx > 0 ? 3.5 : -3.5;
+                                }
+                            });
+                        } else {
+                            const stats = getPlayerTotalStats();
+                            let base = Math.floor(Math.random() * (stats.maxDmg - stats.minDmg + 1)) + stats.minDmg;
+                            base = Math.floor(base * arr.dmgMultiplier);
+                            let crit = Math.random() < 0.22 + (stats.luk * 0.01);
+                            if (crit) base = Math.floor(base * 1.5);
+
+                            m.hp -= base;
+                            m.tintFrames = 8;
+                            m.vx = arr.vx > 0 ? 3 : -3;
+                            createDamageText(base, m.x + m.width/2, m.y - 10, crit);
+
+                            if (m.hp <= 0 && !m.dead) handleMonsterDeath(m);
+                        }
+                    }
+                });
+            });
+
+            arrows = arrows.filter(arr => arr.active);
+        }
+
+        // Damage display animations
+        function createDamageText(amt, x, y, crit) {
+            damageTexts.push({
+                amount: amt,
+                x: x,
+                y: y,
+                alpha: 1.0,
+                crit: crit,
+                vy: -2,
+                life: 50
+            });
+        }
+
+        function handleMonsterDeath(m) {
+            m.dead = true;
+            player.exp += m.exp;
+            toast(`擊敗 ${m.name}! EXP +${m.exp}`, 'bg-emerald-800');
+
+            // Spawn loot drops
+            const mesoCount = Math.floor(Math.random() * 2) + 1;
+            for(let i=0; i<mesoCount; i++) {
+                drops.push({
+                    type: 'meso',
+                    val: Math.floor(Math.random() * 25) + 12 + (player.level * 4),
+                    x: m.x + m.width/2 + (Math.random() * 20 - 10),
+                    y: m.y + m.height - 8,
+                    vy: -4,
+                    vx: Math.random() * 3 - 1.5,
+                    grounded: false
+                });
+            }
+
+            if (Math.random() < 0.4) {
+                const pot = Math.random() < 0.55 ? 'red_potion' : 'blue_potion';
+                drops.push({
+                    type: 'potion',
+                    potType: pot,
+                    x: m.x + m.width/2,
+                    y: m.y + m.height - 8,
+                    vy: -3.5,
+                    vx: Math.random() * 2 - 1,
+                    grounded: false
+                });
+            }
+
+            if (Math.random() < 0.5) {
+                drops.push({
+                    type: 'etc',
+                    x: m.x + m.width/2,
+                    y: m.y + m.height - 8,
+                    vy: -3.5,
+                    vx: Math.random() * 2 - 1,
+                    grounded: false
+                });
+            }
+
+            // Splendid particle death burst
+            for(let i=0; i<10; i++) {
+                particles.push({
+                    x: m.x + m.width/2,
+                    y: m.y + m.height/2,
+                    vx: (Math.random() - 0.5) * 5,
+                    vy: (Math.random() - 0.5) * 5,
+                    color: m.color,
+                    size: Math.random() * 3.5 + 1.5,
+                    alpha: 1.0,
+                    life: 25
+                });
+            }
+
+            checkLevelUp();
+            updateUI();
+        }
+
+        function checkLevelUp() {
+            if (player.exp >= player.nextExp) {
+                player.exp -= player.nextExp;
+                player.level++;
+                player.nextExp = Math.floor(player.nextExp * 1.55) + 40;
+
+                player.ap += 5;
+                player.sp += 3;
+
+                player.maxHp += 30;
+                player.maxMp += 18;
+                player.hp = player.maxHp;
+                player.mp = player.maxMp;
+
+                sfxLevelUp();
+                skillEffects.push({
+                    type: 'level_up',
+                    x: player.x + player.width/2,
+                    y: player.y + player.height/2,
+                    maxFrames: 60,
+                    frame: 0
+                });
+
+                toast(`🎉 恭喜升級至 Lv.${player.level}! 獲得 5 AP 與 3 SP!`, 'bg-gradient-to-r from-yellow-500 to-amber-500 font-extrabold');
+                checkJobAdvancementAvailable();
+                checkLevelUp(); // Recursively level up if exp is still massive
+            }
+        }
+
+        function triggerPickUp() {
+            let any = false;
+            drops.forEach(drop => {
+                if (drop.collected) return;
+                const dx = (player.x + player.width/2) - drop.x;
+                const dy = (player.y + player.height/2) - drop.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+
+                if (dist < 75) {
+                    drop.collected = true;
+                    any = true;
+                    if (drop.type === 'meso') {
+                        player.mesos += drop.val;
+                        sfxMeso();
+                        toast(`獲得 楓幣 +${drop.val} 🪙`, 'bg-yellow-700/80');
+                    } else if (drop.type === 'potion') {
+                        player.inventory.potions[drop.potType]++;
+                        sfxMeso();
+                        toast(`獲得 ${ITEMS[drop.potType].name} x1`, 'bg-blue-800/80');
+                    } else if (drop.type === 'etc') {
+                        player.inventory.etc_loot++;
+                        sfxMeso();
+                        toast(`獲得 楓之谷雜物(ETC) x1`, 'bg-emerald-800/80');
+                    }
+                }
+            });
+            if (any) updateUI();
+        }
+
+        function usePotion(type) {
+            if (player.hp <= 0) return;
+            if (player.inventory.potions[type] <= 0) {
+                toast("該藥水不足！請向商店購買。");
+                return;
+            }
+
+            player.inventory.potions[type]--;
+            playSfx(880, 'sine', 0.1, 0.1);
+
+            if (type === 'red_potion') {
+                player.hp = Math.min(player.maxHp, player.hp + 50);
+                toast("使用 紅色藥水 恢復了 50 HP 🔴");
+            } else if (type === 'blue_potion') {
+                player.mp = Math.min(player.maxMp, player.mp + 30);
+                toast("使用 藍色藥水 恢復了 30 MP 🔵");
+            }
+            updateUI();
+        }
+
+        function allocateStat(stat) {
+            if (player.ap <= 0) return;
+            player.ap--;
+            player[stat]++;
+            if (stat === 'str') player.maxHp += 6;
+            if (stat === 'int') player.maxMp += 4;
+
+            playSfx(600, 'triangle', 0.08, 0.1);
+            updateUI();
+        }
+
+        // --- SKILL ALLOCATION SYSTEM ---
+        function upgradeSkill(sk) {
+            if (player.sp <= 0) return;
+            player.sp--;
+            player.skills[sk]++;
+            playSfx(700, 'triangle', 0.1, 0.1);
+            updateUI();
+        }
+
+        // --- SHOP ENGINE & TAB RENDER ---
+        function populateShopItems() {
+            const container = document.getElementById('shop-items-container');
+            container.innerHTML = '';
+
+            if (activeShopTab === 'potions') {
+                const pots = ['red_potion', 'blue_potion'];
+                pots.forEach(id => {
+                    const item = ITEMS[id];
+                    const row = document.createElement('div');
+                    row.className = 'flex items-center justify-between bg-white bg-opacity-60 p-2 rounded border border-blue-100';
+                    row.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">${item.icon}</span>
+                            <div>
+                                <div class="font-bold text-[11px]">${item.name}</div>
+                                <div class="text-[9px] text-slate-500">${item.desc}</div>
+                            </div>
+                        </div>
+                        <button onclick="buyShopItem('${id}')" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-1 rounded text-[10px]">購買</button>
+                    `;
+                    container.appendChild(row);
+                });
+            } else {
+                const weps = [
+                    'wooden_sword', 'red_lotus_sword', 'golden_cross_sword',
+                    'wooden_wand', 'spirit_wand', 'archangel_staff',
+                    'rookie_bow', 'falcon_bow', 'golden_crossbow',
+                    'rookie_armor', 'bronze_armor', 'holy_robe', 'gale_suit',
+                    'silver_temple_armor', 'sage_robe', 'marksman_coat'
+                ];
+                weps.forEach(id => {
+                    const item = ITEMS[id];
+                    const row = document.createElement('div');
+                    row.className = 'flex items-center justify-between bg-white bg-opacity-60 p-2 rounded border border-blue-100';
+                    row.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">${item.icon}</span>
+                            <div>
+                                <div class="font-bold text-[11px]">${item.name}</div>
+                                <div class="text-[9px] text-slate-500 leading-snug">${item.desc}</div>
+                            </div>
+                        </div>
+                        <button onclick="buyShopItem('${id}')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold px-3 py-1 rounded text-[10px]">購買</button>
+                    `;
+                    container.appendChild(row);
+                });
+            }
+        }
+
+        function buyShopItem(id) {
+            const item = ITEMS[id];
+            if (!item) return;
+
+            if (player.mesos < item.price) {
+                toast("楓幣不足！無法購買此物品。");
+                return;
+            }
+
+            player.mesos -= item.price;
+            playSfx(1200, 'sine', 0.1, 0.15);
+
+            if (item.type === 'consume') {
+                player.inventory.potions[id]++;
+                toast(`成功購買 ${item.name} x1!`);
+            } else {
+                player.inventory.equips.push(id);
+                toast(`成功購買裝備 ${item.name}! 已置入裝備背包。`);
+            }
+            updateUI();
+        }
+
+        function sellAllLoot() {
+            if (player.inventory.etc_loot <= 0) {
+                toast("背包內無雜物可以出售！");
+                return;
+            }
+            const earnings = player.inventory.etc_loot * 25;
+            player.mesos += earnings;
+            toast(`一鍵賣出雜物 x${player.inventory.etc_loot}! 賺取了 ${earnings} 🪙`);
+            player.inventory.etc_loot = 0;
+            playSfx(1400, 'sine', 0.1, 0.2);
+            updateUI();
+        }
+
+        // --- MASTER SYSTEM UI REFRESH ---
+        function updateUI() {
+            const tStats = getPlayerTotalStats();
+
+            // Status Window UI Elements
+            document.getElementById('stat-level').innerText = player.level;
+            document.getElementById('stat-job').innerText = getJobTitleName(player.job);
+            
+            const ranks = ["冒險家", "1轉職業", "2轉職業", "3轉傳奇"];
+            document.getElementById('stat-job-rank').innerText = ranks[player.jobRank] || "冒險家";
+
+            document.getElementById('stat-maxhp').innerText = player.maxHp;
+            document.getElementById('stat-maxmp').innerText = player.maxMp;
+            document.getElementById('stat-att').innerText = `${tStats.minDmg} - ${tStats.maxDmg}`;
+            document.getElementById('stat-def').innerText = tStats.def;
+            document.getElementById('stat-ap').innerText = player.ap;
+            document.getElementById('stat-sp').innerText = player.sp;
+
+            document.getElementById('stat-str').innerText = player.str;
+            document.getElementById('stat-dex').innerText = player.dex;
+            document.getElementById('stat-int').innerText = player.int;
+            document.getElementById('stat-luk').innerText = player.luk;
+
+            // Equipment Slot Previews
+            const wp = player.equipped.weapon ? ITEMS[player.equipped.weapon] : null;
+            const ar = player.equipped.armor ? ITEMS[player.equipped.armor] : null;
+
+            document.getElementById('equip-slot-weapon').innerHTML = wp ? `<span class="text-xl">${wp.icon}</span><span class="text-[8px] text-slate-600 scale-90">${wp.name.slice(0,4)}</span>` : '<span class="text-slate-300">空</span>';
+            document.getElementById('equip-slot-armor').innerHTML = ar ? `<span class="text-xl">${ar.icon}</span><span class="text-[8px] text-slate-600 scale-90">${ar.name.slice(0,4)}</span>` : '<span class="text-slate-300">空</span>';
+
+            document.getElementById('equip-bonus-att').innerText = `+${tStats.weaponAtt}`;
+            document.getElementById('equip-bonus-def').innerText = `+${tStats.armorDef}`;
+
+            // Handle Allocation Buttons
+            const apBtns = document.querySelectorAll('.stat-plus-btn');
+            apBtns.forEach(btn => {
+                if (player.ap > 0) btn.classList.remove('opacity-40', 'pointer-events-none');
+                else btn.classList.add('opacity-40', 'pointer-events-none');
+            });
+
+            // Inventory Item Builder List
+            const invBox = document.getElementById('inventory-list');
+            invBox.innerHTML = '';
+
+            if (activeInventoryTab === 'consume') {
+                const pots = ['red_potion', 'blue_potion'];
+                pots.forEach(id => {
+                    const count = player.inventory.potions[id];
+                    const item = ITEMS[id];
+                    const row = document.createElement('div');
+                    row.className = 'flex items-center justify-between bg-white bg-opacity-70 p-1.5 rounded border border-blue-200 text-xs shadow-sm';
+                    row.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <span class="text-lg">${item.icon}</span>
+                            <div>
+                                <div class="font-bold text-[11px]">${item.name}</div>
+                                <div class="text-[9px] text-slate-500">回復效果 50 點</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <span class="bg-blue-100 text-blue-800 font-extrabold px-1.5 py-0.5 rounded text-[10px]">x${count}</span>
+                            <button onclick="usePotion('${id}')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold px-2 py-0.5 rounded text-[10px]">使用</button>
+                        </div>
+                    `;
+                    invBox.appendChild(row);
+                });
+
+                // ETC Loot
+                if (player.inventory.etc_loot >= 0) {
+                    const row = document.createElement('div');
+                    row.className = 'flex items-center justify-between bg-white bg-opacity-70 p-1.5 rounded border border-blue-200 text-xs shadow-sm';
+                    row.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <span class="text-lg">🪵</span>
+                            <div>
+                                <div class="font-bold text-[11px]">楓之谷戰利品雜物 (ETC)</div>
+                                <div class="text-[9px] text-slate-500">怪物身上掉落的碎屑 (可向商店出售)</div>
+                            </div>
+                        </div>
+                        <span class="bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded text-[10px]">x${player.inventory.etc_loot}</span>
+                    `;
+                    invBox.appendChild(row);
+                }
+            } else {
+                if (player.inventory.equips.length === 0) {
+                    invBox.innerHTML = `<div class="text-center p-8 text-slate-400">目前背包裡沒有裝備。</div>`;
+                } else {
+                    player.inventory.equips.forEach((id, index) => {
+                        const item = ITEMS[id];
+                        const row = document.createElement('div');
+                        row.className = 'flex items-center justify-between bg-white bg-opacity-70 p-1.5 rounded border border-blue-200 text-xs shadow-sm';
+                        row.innerHTML = `
+                            <div class="flex items-center gap-2">
+                                <span class="text-lg">${item.icon}</span>
+                                <div>
+                                    <div class="font-bold text-[11px]">${item.name}</div>
+                                    <div class="text-[9px] text-slate-500">${item.desc.split('(')[0]}</div>
+                                </div>
+                            </div>
+                            <button onclick="equipItem('${id}')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold px-2 py-0.5 rounded text-[10px]">裝備</button>
+                        `;
+                        invBox.appendChild(row);
+                    });
+                }
+            }
+
+            // Sync Bottom interface elements
+            document.getElementById('stat-mesos').innerText = `${player.mesos} 🪙`;
+            document.getElementById('shop-mesos').innerText = `${player.mesos} 🪙`;
+
+            document.getElementById('mbtn-pot-red-count').innerText = player.inventory.potions.red_potion;
+            document.getElementById('mbtn-pot-blue-count').innerText = player.inventory.potions.blue_potion;
+
+            // Render Skills window based on Career Path
+            const skBox = document.getElementById('skill-list-container');
+            skBox.innerHTML = '';
+
+            let visibleSkills = [];
+            if (['Warrior', 'Spearman', 'DragonKnight'].includes(player.job)) {
+                visibleSkills.push({id: 'slash_blast', name: '狂暴攻擊 (1轉)', icon: '💥', desc: '群體揮刀痛擊多名怪物', lv: player.skills.slash_blast});
+            }
+            if (['Spearman', 'DragonKnight'].includes(player.job)) {
+                visibleSkills.push({id: 'ground_smash', name: '地面崩裂 (2轉)', icon: '☄️', desc: '重擊地殼產生地面擴散波', lv: player.skills.ground_smash});
+            }
+            if (player.job === 'DragonKnight') {
+                visibleSkills.push({id: 'dragon_roar', name: '龍之獻祭 (3轉)', icon: '🐉', desc: '引發巨龍狂吼爆發全畫面爆擊', lv: player.skills.dragon_roar});
+            }
+
+            if (['Magician', 'Cleric', 'Priest'].includes(player.job)) {
+                visibleSkills.push({id: 'magic_claw', name: '魔力爪 (1轉)', icon: '⚡', desc: '以魔法撕開空間發射雙重爪擊', lv: player.skills.magic_claw});
+            }
+            if (['Cleric', 'Priest'].includes(player.job)) {
+                visibleSkills.push({id: 'heal', name: '聖光治癒 (2轉)', icon: '⛪', desc: '神聖洗禮大範圍治癒HP並震懾亡靈', lv: player.skills.heal});
+            }
+            if (player.job === 'Priest') {
+                visibleSkills.push({id: 'shining_ray', name: '聖光十字 (3轉)', icon: '👼', desc: '神聖光芒自天墜落全螢幕爆擊毀滅', lv: player.skills.shining_ray});
+            }
+
+            if (['Archer', 'Hunter', 'Ranger'].includes(player.job)) {
+                visibleSkills.push({id: 'double_shot', name: '雙重射擊 (1轉)', icon: '🏹', desc: '蓄力瞬間射出兩發極速利箭', lv: player.skills.double_shot});
+            }
+            if (['Hunter', 'Ranger'].includes(player.job)) {
+                visibleSkills.push({id: 'arrow_bomb', name: '炸彈箭 (2轉)', icon: '💣', desc: '射出高爆火箭引爆造成多重暈眩擊飛', lv: player.skills.arrow_bomb});
+            }
+            if (player.job === 'Ranger') {
+                visibleSkills.push({id: 'arrow_rain', name: '箭雨 (3轉)', icon: '🦅', desc: '朝空中射箭降下箭矢豪雨大面積清場', lv: player.skills.arrow_rain});
+            }
+
+            if (player.jobRank === 0 || visibleSkills.length === 0) {
+                skBox.innerHTML = `
+                    <div class="text-center p-6 text-slate-400">
+                        <p class="font-bold text-xs">初心者沒有任何技能</p>
+                        <p class="text-[9px] mt-1 text-slate-500">達到 8 等後點擊畫面上方「轉職」橫幅即可開啟專屬技能點！</p>
+                    </div>
+                `;
+            } else {
+                visibleSkills.forEach(s => {
+                    const row = document.createElement('div');
+                    row.className = 'bg-white bg-opacity-70 p-2 rounded border border-blue-100 flex items-center justify-between text-xs';
+                    row.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">${s.icon}</span>
+                            <div>
+                                <div class="font-bold text-[11px]">${s.name}</div>
+                                <div class="text-[9px] text-slate-500">${s.desc}</div>
+                                <div class="text-[9px] font-bold text-indigo-700">技能等級: Lv.${s.lv}</div>
+                            </div>
+                        </div>
+                        <button onclick="upgradeSkill('${s.id}')" class="${player.sp > 0 ? '' : 'opacity-30 pointer-events-none'} bg-blue-500 hover:bg-blue-600 text-white w-5 h-5 rounded flex items-center justify-center font-bold text-xs"><i class="fa-solid fa-plus text-[10px]"></i></button>
+                    `;
+                    skBox.appendChild(row);
+                });
+            }
+
+            checkJobAdvancementAvailable();
+
+            // Bottom elements sync
+            document.getElementById('ui-level').innerText = player.level;
+            document.getElementById('ui-job').innerText = getJobTitleName(player.job);
+
+            const hpPct = Math.max(0, Math.min(100, (player.hp / player.maxHp) * 100));
+            document.getElementById('ui-hp-bar').style.width = `${hpPct}%`;
+            document.getElementById('ui-hp-text').innerText = `${player.hp} / ${player.maxHp}`;
+
+            const mpPct = Math.max(0, Math.min(100, (player.mp / player.maxMp) * 100));
+            document.getElementById('ui-mp-bar').style.width = `${mpPct}%`;
+            document.getElementById('ui-mp-text').innerText = `${player.mp} / ${player.maxMp}`;
+
+            const expPct = Math.max(0, Math.min(100, (player.exp / player.nextExp) * 100));
+            document.getElementById('ui-exp-bar').style.width = `${expPct}%`;
+            document.getElementById('ui-exp-text').innerText = `${expPct.toFixed(2)}%`;
+
+            populateShopItems();
+            updateKeyConfigUI();
+        }
+
+        // --- GAME LOOP RENDERING ASSISTANT ---
+        function drawParallaxBackground(map) {
+            let grad = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
+            if (currentMapKey === 'maple_road') {
+                grad.addColorStop(0, '#5fa9c6');
+                grad.addColorStop(1, '#a6e2f1');
+            } else if (currentMapKey === 'henesys') {
+                grad.addColorStop(0, '#7bc97b');
+                grad.addColorStop(1, '#c9ecc9');
+            } else if (currentMapKey === 'ellinia') {
+                grad.addColorStop(0, '#0c4917');
+                grad.addColorStop(1, '#5ca967');
+            } else if (currentMapKey === 'kerning_city') {
+                grad.addColorStop(0, '#10141d');
+                grad.addColorStop(1, '#2d3748');
+            } else if (currentMapKey === 'perion') {
+                grad.addColorStop(0, '#b88c5c');
+                grad.addColorStop(1, '#ffebcd');
+            } else if (currentMapKey === 'temple') {
+                grad.addColorStop(0, '#1a101d');
+                grad.addColorStop(1, '#2c1e33');
+            }
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            // Back hills
+            ctx.fillStyle = (currentMapKey === 'ellinia' || currentMapKey === 'temple') ? '#122515' : '#7fbc86';
+            if (currentMapKey === 'kerning_city') ctx.fillStyle = '#1a202c';
+            if (currentMapKey === 'perion') ctx.fillStyle = '#8c5a3c';
+            if (currentMapKey === 'temple') ctx.fillStyle = '#1c0f21';
+
+            ctx.beginPath();
+            ctx.ellipse(300 - cameraX * 0.1, 450, 400, 160, 0, 0, Math.PI * 2);
+            ctx.ellipse(800 - cameraX * 0.1, 470, 480, 200, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = (currentMapKey === 'ellinia' || currentMapKey === 'temple') ? '#0c1a0e' : '#6ba773';
+            if (currentMapKey === 'kerning_city') ctx.fillStyle = '#10141d';
+            if (currentMapKey === 'perion') ctx.fillStyle = '#7a4e32';
+            if (currentMapKey === 'temple') ctx.fillStyle = '#110915';
+
+            ctx.beginPath();
+            ctx.ellipse(100 - cameraX * 0.2, 490, 320, 140, 0, 0, Math.PI * 2);
+            ctx.ellipse(650 - cameraX * 0.2, 510, 420, 170, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Cloud movement
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+            const scroll = (Date.now() / 90) % (GAME_WIDTH + 200);
+            drawCloud(scroll - 100, 70, 50);
+            drawCloud(GAME_WIDTH - scroll + 300, 110, 40);
+        }
+
+        function drawCloud(x, y, s) {
+            ctx.beginPath();
+            ctx.arc(x, y, s, 0, Math.PI * 2);
+            ctx.arc(x + s * 0.6, y - s * 0.2, s * 0.8, 0, Math.PI * 2);
+            ctx.arc(x + s * 1.1, y, s * 0.6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawMapDecorations(decs) {
+            if (!decs) return;
+            decs.forEach(dec => {
+                const dx = dec.x - cameraX;
+                if (dx < -200 || dx > GAME_WIDTH + 200) return;
+
+                if (dec.type === 'tree') {
+                    const s = dec.size || 1.0;
+                    ctx.fillStyle = '#6E473B';
+                    ctx.fillRect(dx - 11 * s, 480 - 105 * s, 22 * s, 105 * s);
+                    ctx.fillStyle = '#228B22';
+                    ctx.beginPath();
+                    ctx.arc(dx, 480 - 105 * s, 44 * s, 0, Math.PI * 2);
+                    ctx.arc(dx - 22 * s, 480 - 125 * s, 33 * s, 0, Math.PI * 2);
+                    ctx.arc(dx + 22 * s, 480 - 125 * s, 33 * s, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (dec.type === 'big_tree') {
+                    const s = dec.scale || 2.0;
+                    ctx.fillStyle = '#553c35';
+                    ctx.fillRect(dx - 22 * s, 480 - 240 * s, 44 * s, 240 * s);
+                    ctx.fillStyle = '#1b5a26';
+                    ctx.beginPath();
+                    ctx.moveTo(dx - 100 * s, 480 - 100 * s);
+                    ctx.lineTo(dx, 480 - 270 * s);
+                    ctx.lineTo(dx + 100 * s, 480 - 100 * s);
+                    ctx.closePath();
+                    ctx.fill();
+                } else if (dec.type === 'shrub') {
+                    ctx.fillStyle = '#2F855A';
+                    ctx.beginPath();
+                    ctx.arc(dx, dec.y, 18, 0, Math.PI * 2);
+                    ctx.arc(dx - 12, dec.y, 13, 0, Math.PI * 2);
+                    ctx.arc(dx + 12, dec.y, 13, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (dec.type === 'flower') {
+                    ctx.strokeStyle = '#48BB78';
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    ctx.moveTo(dx, 480);
+                    ctx.lineTo(dx, 465);
+                    ctx.stroke();
+                    ctx.fillStyle = '#ED64A6';
+                    ctx.beginPath();
+                    ctx.arc(dx - 3, 462, 4, 0, Math.PI * 2);
+                    ctx.arc(dx + 3, 462, 4, 0, Math.PI * 2);
+                    ctx.arc(dx, 456, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (dec.type === 'mushroom_house') {
+                    const s = dec.scale || 1.0;
+                    ctx.fillStyle = '#FFFDD0';
+                    ctx.beginPath();
+                    ctx.arc(dx, 480 - 15 * s, 32 * s, Math.PI, 0);
+                    ctx.fillRect(dx - 32 * s, 480 - 15 * s, 64 * s, 15 * s);
+                    ctx.fill();
+                    ctx.fillStyle = '#E53E3E';
+                    ctx.beginPath();
+                    ctx.arc(dx, 480 - 32 * s, 42 * s, Math.PI, 0);
+                    ctx.fill();
+                }
+            });
+        }
+
+        function drawPlatforms(plats) {
+            if (!plats) return;
+            plats.forEach(p => {
+                const x1 = p.x1 - cameraX;
+                const x2 = p.x2 - cameraX;
+
+                ctx.fillStyle = '#4c321d';
+                ctx.fillRect(x1, p.y, x2 - x1, 14);
+
+                ctx.fillStyle = '#459f48';
+                ctx.fillRect(x1, p.y, x2 - x1, 5);
+
+                ctx.fillStyle = '#2e1c0d';
+                ctx.fillRect(x1, p.y + 14, x2 - x1, 2);
+            });
+        }
+
+        function drawPortals(portals) {
+            if (!portals) return;
+            portals.forEach(p => {
+                const px = p.x - cameraX;
+                const py = p.y;
+
+                const pulse = Math.abs(Math.sin(Date.now() / 200)) * 5;
+                const r = 24 + pulse;
+
+                let grad = ctx.createRadialGradient(px, py - 40, 3, px, py - 40, r + 15);
+                grad.addColorStop(0, 'rgba(100, 210, 255, 0.9)');
+                grad.addColorStop(0.6, 'rgba(50, 110, 240, 0.35)');
+                grad.addColorStop(1, 'rgba(50, 110, 240, 0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(px, py - 40, r + 15, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = 'rgba(255,255,255,0.85)';
+                ctx.beginPath();
+                ctx.ellipse(px, py - 40, 10, 42 + pulse * 0.4, 0, 0, Math.PI*2);
+                ctx.fill();
+
+                // Name tag
+                ctx.fillStyle = 'rgba(0,0,0,0.75)';
+                ctx.fillRect(px - 50, py - 105, 100, 16);
+                ctx.strokeStyle = '#5bc0be';
+                ctx.strokeRect(px - 50, py - 105, 100, 16);
+
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 9px "Noto Sans TC"';
+                ctx.textAlign = 'center';
+                ctx.fillText(p.label, px, py - 94);
+            });
+        }
+
+        function drawPlayer() {
+            if (player.hp <= 0) return;
+            const px = player.x - cameraX;
+            const py = player.y;
+
+            const breathing = player.state === 'idle' ? Math.sin(Date.now() / 180) * 1.5 : 0;
+            const dir = player.facing === 'right' ? 1 : -1;
+
+            ctx.save();
+            ctx.translate(px + player.width/2, py + player.height/2);
+
+            // Draw Hair (Back)
+            ctx.fillStyle = '#3c2415';
+            ctx.beginPath();
+            ctx.arc(-2, -18 + breathing, 11, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Overalls cloth body colors dynamically based on Job selected
+            if (['Warrior', 'Spearman', 'DragonKnight'].includes(player.job)) {
+                ctx.fillStyle = '#b71c1c'; 
+            } else if (['Magician', 'Cleric', 'Priest'].includes(player.job)) {
+                ctx.fillStyle = '#1565c0'; 
+            } else if (['Archer', 'Hunter', 'Ranger'].includes(player.job)) {
+                ctx.fillStyle = '#2e7d32'; 
+            } else {
+                ctx.fillStyle = '#455a64'; 
+            }
+            ctx.fillRect(-8, 5 + breathing, 16, 17);
+
+            // Legs
+            ctx.fillStyle = '#e0e0e0';
+            ctx.fillRect(-6, 21, 4, 7);
+            ctx.fillRect(2, 21, 4, 7);
+            ctx.fillStyle = '#212121';
+            ctx.fillRect(-8, 27, 7, 3);
+            ctx.fillRect(1, 27, 7, 3);
+
+            // Face peach
+            ctx.fillStyle = '#ffdca3';
+            ctx.beginPath();
+            ctx.arc(0, -10 + breathing, 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Eyes
+            ctx.fillStyle = '#111';
+            ctx.beginPath();
+            ctx.arc(4 * dir, -10 + breathing, 1.8, 0, Math.PI * 2);
+            ctx.arc(8 * dir, -10 + breathing, 1.8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Hair spikes
+            ctx.fillStyle = '#4e342e';
+            ctx.beginPath();
+            ctx.moveTo(-11, -16 + breathing);
+            ctx.lineTo(-4, -25 + breathing);
+            ctx.lineTo(4, -25 + breathing);
+            ctx.lineTo(11, -16 + breathing);
+            ctx.lineTo(4 * dir, -17 + breathing);
+            ctx.closePath();
+            ctx.fill();
+
+            // Weapon rendering
+            ctx.save();
+            ctx.translate(9 * dir, 7 + breathing);
+            if (player.state === 'attack') {
+                ctx.rotate(dir * (Math.PI/3 + Math.sin(Date.now() / 15) * 0.4));
+            } else {
+                ctx.rotate(dir * Math.PI / 6);
+            }
+
+            const wp = ITEMS[player.equipped.weapon];
+            if (wp) {
+                if (wp.id.includes('bow') || wp.id.includes('crossbow')) {
+                    ctx.strokeStyle = '#8d6e63';
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    ctx.arc(-1, -8, 12, -Math.PI/2, Math.PI/2);
+                    ctx.stroke();
+                    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(-1, -20);
+                    ctx.lineTo(-1, 4);
+                    ctx.stroke();
+                } else if (wp.id.includes('wand') || wp.id.includes('staff')) {
+                    ctx.fillStyle = '#8d6e63';
+                    ctx.fillRect(-1.5, -18, 3, 22);
+                    ctx.fillStyle = '#29b6f6';
+                    ctx.beginPath();
+                    ctx.arc(0, -19, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = '#cfd8dc';
+                    ctx.fillRect(-1.5, -20, 3, 18);
+                    ctx.strokeStyle = '#78909c';
+                    ctx.lineWidth = 0.8;
+                    ctx.strokeRect(-1.5, -20, 3, 18);
+                    ctx.fillStyle = '#fbc02d';
+                    ctx.fillRect(-3.5, -2, 7, 3);
+                }
+            }
+            ctx.restore();
+
+            ctx.restore();
+
+            // Level / Name Badge beneath feet
+            ctx.fillStyle = 'rgba(0,0,0,0.65)';
+            ctx.fillRect(px - 15, py + player.height + 4, player.width + 30, 15);
+            ctx.strokeStyle = '#37474f';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(px - 15, py + player.height + 4, player.width + 30, 15);
+
+            ctx.fillStyle = '#fbc02d';
+            ctx.font = 'bold 9px "Noto Sans TC"';
+            ctx.textAlign = 'center';
+            ctx.fillText(`Lv.${player.level} ${getJobTitleName(player.job)}`, px + player.width/2, py + player.height + 14);
+        }
+
+        function drawMonsters() {
+            monsters.forEach(m => {
+                if (m.hp <= 0) return;
+                const mx = m.x - cameraX;
+                const my = m.y;
+
+                ctx.save();
+                if (m.tintFrames > 0) {
+                    ctx.shadowColor = '#FF0000';
+                    ctx.shadowBlur = 10;
+                    m.tintFrames--;
+                }
+
+                if (m.type === 'snail') {
+                    // Shell
+                    ctx.fillStyle = m.color;
+                    ctx.beginPath();
+                    ctx.arc(mx + m.width * 0.45, my + m.height * 0.5, 14, Math.PI, 0);
+                    ctx.lineTo(mx + m.width * 0.85, my + m.height);
+                    ctx.lineTo(mx + m.width * 0.05, my + m.height);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(mx + m.width * 0.45, my + m.height * 0.5, 6, 0, Math.PI * 1.5);
+                    ctx.stroke();
+
+                    // Flesh
+                    ctx.fillStyle = '#FFEE58';
+                    ctx.beginPath();
+                    ctx.arc(mx + m.width * 0.8, my + m.height * 0.45, 5.5, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.fillRect(mx + m.width * 0.2, my + m.height * 0.6, m.width * 0.6, m.height * 0.4);
+                } else if (m.type === 'slime') {
+                    const bounce = Math.sin(Date.now() / 130) * 2;
+                    ctx.fillStyle = m.color;
+                    ctx.beginPath();
+                    ctx.moveTo(mx + m.width/2, my);
+                    ctx.bezierCurveTo(mx + m.width, my + bounce, mx + m.width, my + m.height - bounce, mx + m.width/2, my + m.height);
+                    ctx.bezierCurveTo(mx, my + m.height - bounce, mx, my + bounce, mx + m.width/2, my);
+                    ctx.fill();
+                } else if (m.type === 'mushroom') {
+                    ctx.fillStyle = m.color;
+                    ctx.beginPath();
+                    ctx.arc(mx + m.width/2, my + m.height * 0.45, 18, Math.PI, 0);
+                    ctx.fill();
+                    ctx.fillStyle = '#fffcda';
+                    ctx.fillRect(mx + m.width*0.3, my + m.height*0.45, m.width*0.4, m.height*0.55);
+                } else if (m.type === 'stump') {
+                    ctx.fillStyle = m.color;
+                    ctx.fillRect(mx, my, m.width, m.height);
+                    ctx.fillStyle = '#4e342e';
+                    ctx.fillRect(mx + 6, my, 2.5, m.height);
+                    ctx.fillRect(mx + 20, my, 3.5, m.height);
+                } else if (m.type === 'wild_boar') {
+                    // Big chunky boar body
+                    ctx.fillStyle = m.color;
+                    ctx.fillRect(mx, my + 8, m.width, m.height - 8);
+                    // Boar Head & Red Snout
+                    ctx.fillStyle = '#3E2723';
+                    ctx.fillRect(mx + m.width * 0.6, my, m.width * 0.4, m.height * 0.6);
+                    ctx.fillStyle = '#FF8A80';
+                    ctx.fillRect(mx + m.width * 0.85, my + 4, m.width * 0.15, 6);
+                    // Tusks
+                    ctx.fillStyle = '#ECEFF1';
+                    ctx.beginPath();
+                    ctx.moveTo(mx + m.width * 0.8, my + m.height * 0.5);
+                    ctx.lineTo(mx + m.width * 0.95, my + m.height * 0.3);
+                    ctx.lineTo(mx + m.width * 0.85, my + m.height * 0.6);
+                    ctx.fill();
+                } else if (m.type === 'lupin') {
+                    // Monkey torso & head
+                    ctx.fillStyle = m.color;
+                    ctx.beginPath();
+                    ctx.arc(mx + m.width/2, my + m.height * 0.4, 11, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.fillRect(mx + m.width * 0.25, my + m.height * 0.4, m.width * 0.5, m.height * 0.6);
+                    // Ears
+                    ctx.fillStyle = '#BCAAA4';
+                    ctx.beginPath();
+                    ctx.arc(mx + 4, my + 14, 5, 0, Math.PI*2);
+                    ctx.arc(mx + m.width - 4, my + 14, 5, 0, Math.PI*2);
+                    ctx.fill();
+                    // Holding classic banana yellow outline
+                    ctx.strokeStyle = '#FFEE58';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(mx + m.width * 0.7, my + m.height * 0.6, 6, 0, Math.PI);
+                    ctx.stroke();
+                } else if (m.type === 'drg_soldier') {
+                    // Dragon Scaled Soldier purple heavy look
+                    ctx.fillStyle = m.color;
+                    ctx.fillRect(mx + 6, my + 12, m.width - 12, m.height - 12);
+                    // Wing details
+                    ctx.fillStyle = '#4527A0';
+                    ctx.beginPath();
+                    ctx.moveTo(mx + 4, my + 20);
+                    ctx.lineTo(mx - 8, my + 10);
+                    ctx.lineTo(mx + 4, my + 30);
+                    ctx.fill();
+                    // Helmet Horns
+                    ctx.fillStyle = '#00E676';
+                    ctx.beginPath();
+                    ctx.moveTo(mx + m.width * 0.3, my + 12);
+                    ctx.lineTo(mx + m.width * 0.5, my - 4);
+                    ctx.lineTo(mx + m.width * 0.7, my + 12);
+                    ctx.fill();
+                } else if (m.type === 'balrog') {
+                    // BOSS - Giant Demon Balrog (Black / Red outline aura)
+                    const pulse = Math.abs(Math.sin(Date.now() / 150)) * 6;
+                    ctx.fillStyle = 'rgba(239, 83, 80, 0.2)';
+                    ctx.beginPath();
+                    ctx.arc(mx + m.width/2, my + m.height/2, 45 + pulse, 0, Math.PI*2);
+                    ctx.fill();
+
+                    // Main muscular body
+                    ctx.fillStyle = m.color;
+                    ctx.fillRect(mx, my + 20, m.width, m.height - 20);
+                    // Huge Curved Ram Horns
+                    ctx.strokeStyle = '#D84315';
+                    ctx.lineWidth = 6;
+                    ctx.beginPath();
+                    ctx.arc(mx + 10, my + 10, 16, Math.PI, 0);
+                    ctx.arc(mx + m.width - 10, my + 10, 16, Math.PI, 0);
+                    ctx.stroke();
+                    // Glowing Red Eyes
+                    ctx.fillStyle = '#FF1744';
+                    ctx.beginPath();
+                    ctx.arc(mx + m.width * 0.3, my + 25, 4.5, 0, Math.PI*2);
+                    ctx.arc(mx + m.width * 0.7, my + 25, 4.5, 0, Math.PI*2);
+                    ctx.fill();
+                    // Demon Wings on Back
+                    ctx.fillStyle = '#1A1A1A';
+                    ctx.beginPath();
+                    ctx.moveTo(mx - 5, my + 30);
+                    ctx.lineTo(mx - 32, my + 5);
+                    ctx.lineTo(mx - 10, my + 48);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(mx + m.width + 5, my + 30);
+                    ctx.lineTo(mx + m.width + 32, my + 5);
+                    ctx.lineTo(mx + m.width + 10, my + 48);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                ctx.restore();
+
+                // Small HP bar
+                const hpPct = m.hp / m.maxHp;
+                ctx.fillStyle = 'rgba(0,0,0,0.55)';
+                ctx.fillRect(mx + m.width * 0.05, my - 7, m.width * 0.9, 3.5);
+                ctx.fillStyle = '#ef5350';
+                ctx.fillRect(mx + m.width * 0.05, my - 7, m.width * 0.9 * hpPct, 3.5);
+
+                // Monster name label
+                ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                ctx.fillRect(mx - 10, my - 20, m.width + 20, 11);
+                ctx.fillStyle = '#fff';
+                ctx.font = '700 8px "Noto Sans TC"';
+                ctx.textAlign = 'center';
+                ctx.fillText(m.name, mx + m.width/2, my - 12);
+            });
+        }
+
+        function drawDrops() {
+            drops.forEach(drop => {
+                if (drop.collected) return;
+                const dx = drop.x - cameraX;
+                const dy = drop.y;
+
+                if (drop.type === 'meso') {
+                    ctx.fillStyle = '#fbc02d';
+                    ctx.beginPath();
+                    ctx.arc(dx, dy, 6.5, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.fillStyle = '#e0a800';
+                    ctx.fillRect(dx - 2.5, dy - 5, 5, 2);
+                } else if (drop.type === 'potion') {
+                    ctx.fillStyle = drop.potType === 'red_potion' ? '#ef5350' : '#42a5f5';
+                    ctx.beginPath();
+                    ctx.arc(dx, dy, 5.5, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.fillStyle = '#b0bec5';
+                    ctx.fillRect(dx - 1.5, dy - 7, 3, 2.5);
+                } else if (drop.type === 'etc') {
+                    ctx.fillStyle = '#4db6ac';
+                    ctx.beginPath();
+                    ctx.moveTo(dx - 4.5, dy + 4);
+                    ctx.lineTo(dx, dy - 4);
+                    ctx.lineTo(dx + 4.5, dy + 4);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            });
+        }
+
+        function drawArrows() {
+            arrows.forEach(arr => {
+                const ax = arr.x - cameraX;
+                const ay = arr.y;
+
+                ctx.save();
+                ctx.fillStyle = arr.type === 'bomb_arrow' ? '#ff7043' : '#eceff1';
+                ctx.fillRect(ax, ay, arr.width, arr.height);
+                
+                ctx.fillStyle = '#ef5350';
+                if (arr.facing === 'right') {
+                    ctx.fillRect(ax, ay - 1, 3, arr.height + 2);
+                } else {
+                    ctx.fillRect(ax + arr.width - 3, ay - 1, 3, arr.height + 2);
+                }
+                ctx.restore();
+            });
+        }
+
+        function drawSkillEffects() {
+            skillEffects.forEach(fx => {
+                const fxX = fx.x - cameraX;
+                const fxY = fx.y;
+                const pct = fx.frame / fx.maxFrames;
+
+                if (fx.type === 'slash') {
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${1.0 - pct})`;
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    if (fx.facing === 'right') {
+                        ctx.arc(fxX - 8, fxY, 26, -Math.PI/3, Math.PI/3);
+                    } else {
+                        ctx.arc(fxX + 8, fxY, 26, Math.PI * 0.7, Math.PI * 1.3);
+                    }
+                    ctx.stroke();
+                } else if (fx.type === 'slash_blast') {
+                    ctx.strokeStyle = `rgba(239, 83, 80, ${1.0 - pct})`;
+                    ctx.lineWidth = 7;
+                    ctx.beginPath();
+                    ctx.arc(fxX, fxY, 35 + pct * 25, 0, Math.PI * 2);
+                    ctx.stroke();
+                } else if (fx.type === 'ground_smash') {
+                    ctx.fillStyle = `rgba(141, 110, 99, ${0.8 - pct})`;
+                    ctx.fillRect(fxX - 100 * pct, fxY, 200 * pct, 15);
+                    ctx.fillStyle = `rgba(255, 112, 67, ${0.9 - pct})`;
+                    ctx.fillRect(fxX - 60 * pct, fxY - 10, 120 * pct, 10);
+                } else if (fx.type === 'dragon_roar') {
+                    ctx.strokeStyle = `rgba(183, 28, 28, ${1.0 - pct})`;
+                    ctx.lineWidth = 12 * (1.0 - pct);
+                    ctx.beginPath();
+                    ctx.arc(fxX, fxY, 15 + pct * 280, 0, Math.PI*2);
+                    ctx.stroke();
+
+                    ctx.fillStyle = `rgba(255, 179, 0, ${0.7 - pct})`;
+                    ctx.font = '900 36px "Noto Sans TC"';
+                    ctx.textAlign = 'center';
+                    ctx.fillText("龍之獻祭 !!", fxX, fxY - 60);
+                } else if (fx.type === 'magic_claw') {
+                    ctx.strokeStyle = `rgba(128, 222, 234, ${1.0 - pct})`;
+                    ctx.lineWidth = 3.5;
+                    ctx.beginPath();
+                    ctx.moveTo(fxX - 12 + pct*30, fxY - 25 + pct*50);
+                    ctx.lineTo(fxX - 4 + pct*30, fxY + 15 + pct*50);
+                    ctx.stroke();
+                } else if (fx.type === 'heal_wave') {
+                    ctx.strokeStyle = `rgba(255, 238, 88, ${0.9 - pct})`;
+                    ctx.lineWidth = 5;
+                    ctx.beginPath();
+                    ctx.arc(fxX, fxY, 20 + pct * 150, 0, Math.PI * 2);
+                    ctx.stroke();
+                } else if (fx.type === 'shining_ray') {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${0.8 - pct})`;
+                    ctx.fillRect(fxX - 80, 0, 160, GAME_HEIGHT);
+                    let grad = ctx.createLinearGradient(fxX, 0, fxX, GAME_HEIGHT);
+                    grad.addColorStop(0, 'rgba(255,235,59,0.8)');
+                    grad.addColorStop(0.5, `rgba(255,255,255, ${0.9 - pct})`);
+                    grad.addColorStop(1, 'rgba(255,193,7,0)');
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+                } else if (fx.type === 'explosion') {
+                    ctx.fillStyle = `rgba(255, 112, 67, ${1.0 - pct})`;
+                    ctx.beginPath();
+                    ctx.arc(fxX, fxY, 10 + pct * 35, 0, Math.PI*2);
+                    ctx.fill();
+                } else if (fx.type === 'arrow_rain') {
+                    ctx.fillStyle = 'rgba(207, 216, 220, 0.9)';
+                    for(let i=0; i<8; i++) {
+                        const ax = fxX + Math.sin(i + fx.frame) * 80;
+                        const ay = 50 + pct * 350 + (i * 20);
+                        ctx.fillRect(ax, ay, 2, 22);
+                    }
+                } else if (fx.type === 'level_up') {
+                    ctx.fillStyle = `rgba(253, 224, 71, ${0.7 * (1.0 - pct)})`;
+                    ctx.fillRect(fxX - 25, fxY - 140, 50, 160);
+
+                    ctx.fillStyle = `rgba(255, 230, 0, ${1.0 - pct})`;
+                    ctx.font = `italic 900 ${16 + pct * 10}px "Noto Sans TC"`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText("LEVEL UP!!", fxX, fxY - 90 - pct * 25);
+                }
+            });
+        }
+
+        function drawParticles() {
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.alpha;
+                ctx.beginPath();
+                ctx.arc(p.x - cameraX, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1.0;
+        }
+
+        function drawDamageTexts() {
+            damageTexts.forEach(dt => {
+                ctx.save();
+                ctx.globalAlpha = dt.alpha;
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 4;
+
+                if (dt.crit) {
+                    ctx.font = '900 24px "Noto Sans TC"';
+                    ctx.strokeText(`Critical! ${dt.amount}`, dt.x - cameraX, dt.y);
+                    let grad = ctx.createLinearGradient(0, dt.y - 12, 0, dt.y);
+                    grad.addColorStop(0, '#ff1744');
+                    grad.addColorStop(1, '#b71c1c');
+                    ctx.fillStyle = grad;
+                    ctx.fillText(`Critical! ${dt.amount}`, dt.x - cameraX, dt.y);
+                } else {
+                    ctx.font = 'bold 18px "Noto Sans TC"';
+                    ctx.strokeText(dt.amount, dt.x - cameraX, dt.y);
+                    let grad = ctx.createLinearGradient(0, dt.y - 10, 0, dt.y);
+                    grad.addColorStop(0, '#fbc02d');
+                    grad.addColorStop(1, '#f57c00');
+                    ctx.fillStyle = grad;
+                    ctx.fillText(dt.amount, dt.x - cameraX, dt.y);
+                }
+                ctx.restore();
+            });
+        }
+
+        // --- GAME SYSTEM PHYSICS LOOPS ---
+        function runGamePhysics() {
+            const currentMap = MAPS[currentMapKey];
+
+            // Horizontal Movement (Using bound keys)
+            let walking = false;
+            if (keyState[keyBinds.moveRight]) {
+                player.vx = PLAYER_RUN_SPEED;
+                player.facing = 'right';
+                walking = true;
+            } else if (keyState[keyBinds.moveLeft]) {
+                player.vx = -PLAYER_RUN_SPEED;
+                player.facing = 'left';
+                walking = true;
+            } else {
+                player.vx = 0;
+            }
+
+            player.x += player.vx;
+
+            // Boundaries
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > 1000) player.x = 1000 - player.width;
+
+            // Gravity
+            player.vy += PHYSICS_GRAVITY;
+            player.y += player.vy;
+
+            // Platforms collision for Player
+            let footY = player.y + player.height;
+            if (footY >= currentMap.groundY) {
+                player.y = currentMap.groundY - player.height;
+                player.vy = 0;
+                player.grounded = true;
+            } else {
+                player.grounded = false;
+            }
+
+            if (!player.grounded && player.vy >= 0) {
+                currentMap.platforms.forEach(plat => {
+                    const prevFootY = footY - player.vy;
+                    if (player.x + player.width > plat.x1 && player.x < plat.x2) {
+                        if (prevFootY <= plat.y + 2 && footY >= plat.y) {
+                            player.y = plat.y - player.height;
+                            player.vy = 0;
+                            player.grounded = true;
+                        }
+                    }
+                });
+            }
+
+            // State changes
+            if (player.hp <= 0) {
+                player.state = 'idle';
+            } else if (player.grounded) {
+                if (Date.now() - player.lastAttackTime < player.attackCooldown) {
+                    player.state = 'attack';
+                } else {
+                    player.state = walking ? 'walk' : 'idle';
+                }
+            } else {
+                player.state = 'jump';
+            }
+
+            // Jump Action
+            if (keyState[keyBinds.jump] && player.grounded && player.hp > 0) {
+                player.vy = PLAYER_JUMP_FORCE;
+                player.grounded = false;
+                sfxJump();
+                keyState[keyBinds.jump] = false; 
+            }
+
+            // Attack & Skill Hold-down checks
+            if (keyState[keyBinds.attack]) {
+                triggerAttack();
+            }
+            if (keyState[keyBinds.skill]) {
+                triggerSkill();
+            }
+
+            // Smooth camera lerping
+            let targetCam = player.x - GAME_WIDTH/2 + player.width/2;
+            cameraX += (targetCam - cameraX) * 0.15;
+            cameraX = Math.max(0, Math.min(1000 - GAME_WIDTH, cameraX));
+
+            // Monsters physics (Now featuring platform collision and gravity!)
+            monsters.forEach(m => {
+                if (m.hp <= 0) return;
+                m.vy += 0.35;
+                m.y += m.vy;
+
+                let mFootY = m.y + m.height;
+                m.grounded = false;
+
+                // Collide with base ground
+                if (mFootY >= currentMap.groundY) {
+                    m.y = currentMap.groundY - m.height;
+                    m.vy = 0;
+                    m.grounded = true;
+                }
+
+                // Collide with air platforms organically
+                if (!m.grounded && m.vy >= 0) {
+                    currentMap.platforms.forEach(plat => {
+                        const prevMFootY = mFootY - m.vy;
+                        if (m.x + m.width > plat.x1 && m.x < plat.x2) {
+                            if (prevMFootY <= plat.y + 2 && mFootY >= plat.y) {
+                                m.y = plat.y - m.height;
+                                m.vy = 0;
+                                m.grounded = true;
+                            }
+                        }
+                    });
+                }
+
+                // AI Wandering & Platform patrol limits
+                if (Math.random() < 0.015 && m.grounded) {
+                    m.vx = (Math.random() * 2 - 1) * m.speed;
+                    if (m.canJump && Math.random() < 0.45) {
+                        m.vy = -5.5;
+                    }
+                }
+                m.x += m.vx;
+
+                // Map boundary restriction
+                if (m.x < 0) { m.x = 0; m.vx *= -1; }
+                if (m.x + m.width > 1000) { m.x = 1000 - m.width; m.vx *= -1; }
+
+                // Player hit threat collisions
+                if (player.hp > 0) {
+                    if (player.x + player.width > m.x && player.x < m.x + m.width &&
+                        player.y + player.height > m.y && player.y < m.y + m.height) {
+                        
+                        const now = Date.now();
+                        if (!player.lastHitTime || now - player.lastHitTime > 1000) {
+                            player.lastHitTime = now;
+                            const tStats = getPlayerTotalStats();
+                            const finalDmg = Math.max(1, m.damage - Math.floor(tStats.def * 0.18));
+
+                            player.hp = Math.max(0, player.hp - finalDmg);
+                            playSfx(120, 'sawtooth', 0.18, 0.25);
+
+                            createDamageText(finalDmg, player.x + player.width/2, player.y + 5, true);
+                            
+                            player.vx = m.x < player.x ? 5 : -5;
+                            player.vy = -3.5;
+                            player.grounded = false;
+
+                            toast(`受到攻擊! HP -${finalDmg}`, 'bg-red-950');
+
+                            if (player.hp <= 0) {
+                                document.getElementById('death-overlay').classList.remove('hidden');
+                                playSfx(90, 'sawtooth', 0.5, 0.35);
+                            }
+                            updateUI();
+                        }
+                    }
+                }
+            });
+
+            // Fall gravity for drops
+            drops.forEach(drop => {
+                if (drop.collected) return;
+                if (!drop.grounded) {
+                    drop.vy += 0.35;
+                    drop.y += drop.vy;
+                    drop.x += drop.vx;
+                    drop.vx *= 0.94;
+
+                    if (drop.y >= currentMap.groundY - 5) {
+                        drop.y = currentMap.groundY - 5;
+                        drop.vy = 0;
+                        drop.vx = 0;
+                        drop.grounded = true;
+                    }
+                }
+            });
+
+            // Particles logic
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.04;
+                p.life--;
+            });
+            particles = particles.filter(p => p.life > 0 && p.alpha > 0);
+
+            // Floating text logic
+            damageTexts.forEach(dt => {
+                dt.y += dt.vy;
+                dt.alpha -= 0.018;
+                dt.life--;
+            });
+            damageTexts = damageTexts.filter(dt => dt.life > 0);
+
+            // Skill effects logic
+            skillEffects.forEach(fx => fx.frame++);
+            skillEffects = skillEffects.filter(fx => fx.frame < fx.maxFrames);
+
+            monsters = monsters.filter(m => !m.dead);
+
+            // Check portal overlays
+            checkPortalProximity();
+        }
+
+        // Expanded Spawner supporting multi-layer platform layouts!
+        function spawnMonstersPeriodically() {
+            const now = Date.now();
+            if (now - lastMonsterSpawn > SPAWN_INTERVAL) {
+                lastMonsterSpawn = now;
+                const currentMap = MAPS[currentMapKey];
+                const activeTypes = currentMap.monsters;
+
+                // Max monster threshold boosted to 14 for massive maps!
+                if (monsters.length < 14) {
+                    const type = activeTypes[Math.floor(Math.random() * activeTypes.length)];
+                    const template = MONSTER_TEMPLATES[type];
+                    
+                    // Determine dimensions
+                    let w = 32, h = 28;
+                    if (type === 'stump') { w = 40; h = 48; }
+                    else if (type === 'mushroom') { w = 36; h = 36; }
+                    else if (type === 'wild_boar') { w = 48; h = 38; }
+                    else if (type === 'lupin') { w = 38; h = 42; }
+                    else if (type === 'drg_soldier') { w = 44; h = 55; }
+                    else if (type === 'balrog') { w = 85; h = 90; }
+
+                    // Choose whether to spawn on a platform or the ground
+                    let spawnX, spawnY;
+                    const spawnOnPlat = Math.random() < 0.65 && currentMap.platforms.length > 0;
+
+                    if (spawnOnPlat) {
+                        const plat = currentMap.platforms[Math.floor(Math.random() * currentMap.platforms.length)];
+                        spawnX = Math.random() * (plat.x2 - plat.x1 - w - 20) + (plat.x1 + 10);
+                        spawnY = plat.y - h - 10; // Placed exactly on top
+                    } else {
+                        spawnX = Math.random() * 800 + 100;
+                        spawnY = currentMap.groundY - h - 10;
+                    }
+
+                    monsters.push({
+                        ...template,
+                        x: spawnX,
+                        y: spawnY,
+                        vx: (Math.random() * 2 - 1) * template.speed,
+                        vy: 0,
+                        width: w,
+                        height: h,
+                        grounded: false,
+                        dead: false,
+                        tintFrames: 0
+                    });
+                }
+            }
+        }
+
+        // --- MASTER TICK LOOP ---
+        function masterLoop() {
+            if (!gameRunning) return;
+
+            spawnMonstersPeriodically();
+            runGamePhysics();
+            runArrowPhysics();
+
+            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+            const map = MAPS[currentMapKey];
+            drawParallaxBackground(map);
+            drawMapDecorations(map.decorations);
+            drawPlatforms(map.platforms);
+            drawPortals(map.portals);
+
+            drawDrops();
+            drawArrows();
+            drawMonsters();
+            drawPlayer();
+            drawSkillEffects();
+            drawParticles();
+            drawDamageTexts();
+
+            requestAnimationFrame(masterLoop);
+        }
+
+        // --- INTERACTIVE MOBILE HANDLERS ---
+        function setupMobileControls() {
+            const mLeft = document.getElementById('mbtn-left');
+            const mRight = document.getElementById('mbtn-right');
+            const mJump = document.getElementById('mbtn-jump');
+            const mAttack = document.getElementById('mbtn-attack');
+            const mSkill = document.getElementById('mbtn-skill');
+            const mPick = document.getElementById('mbtn-pick');
+
+            mLeft.addEventListener('touchstart', e => { e.preventDefault(); keyState[keyBinds.moveLeft] = true; });
+            mLeft.addEventListener('touchend', e => { e.preventDefault(); keyState[keyBinds.moveLeft] = false; });
+            mLeft.addEventListener('mousedown', e => { keyState[keyBinds.moveLeft] = true; });
+            mLeft.addEventListener('mouseup', e => { keyState[keyBinds.moveLeft] = false; });
+
+            mRight.addEventListener('touchstart', e => { e.preventDefault(); keyState[keyBinds.moveRight] = true; });
+            mRight.addEventListener('touchend', e => { e.preventDefault(); keyState[keyBinds.moveRight] = false; });
+            mRight.addEventListener('mousedown', e => { keyState[keyBinds.moveRight] = true; });
+            mRight.addEventListener('mouseup', e => { keyState[keyBinds.moveRight] = false; });
+
+            const handleMobileJump = (e) => {
+                if (e) e.preventDefault();
+                if (player.grounded && player.hp > 0) {
+                    player.vy = PLAYER_JUMP_FORCE;
+                    player.grounded = false;
+                    sfxJump();
+                }
+            };
+            mJump.addEventListener('touchstart', handleMobileJump);
+            mJump.addEventListener('mousedown', handleMobileJump);
+
+            mAttack.addEventListener('touchstart', e => { e.preventDefault(); triggerAttack(); });
+            mAttack.addEventListener('mousedown', e => { triggerAttack(); });
+
+            mSkill.addEventListener('touchstart', e => { e.preventDefault(); triggerSkill(); });
+            mSkill.addEventListener('mousedown', e => { triggerSkill(); });
+
+            mPick.addEventListener('touchstart', e => { e.preventDefault(); triggerPickUp(); });
+            mPick.addEventListener('mousedown', e => { triggerPickUp(); });
+        }
+
+        // Bootstrapping
+        document.getElementById('btn-start-game').addEventListener('click', () => {
+            document.getElementById('game-overlay').classList.add('hidden');
+            initAudio();
+            toggleAudio(); 
+
+            gameRunning = true;
+            requestAnimationFrame(masterLoop);
+            toast("冒險正式開始！快至「快捷設定」配置您的操作鍵，極速狂升 50 級吧！");
+            updateUI();
+        });
+
+        setupMobileControls();
+        updateUI();
+
+    </script>
+</body>
+</html>
